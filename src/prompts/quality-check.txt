@@ -1,0 +1,30 @@
+Your task: verify a post before it is published. You receive JSON:
+{ "full_text": "...", "source_title": "..." or null, "kind": "news" or "evergreen" }.
+
+First, the kind-specific check:
+- If kind is "news" (a source_title is given): FAITHFULNESS — the post must stay true to source_title, without inventing facts, numbers, names, dates, or quotes the headline does not support.
+- If kind is "evergreen" (no source_title): ACCURACY — the post is standalone advice (a tip, warning, explainer, or safety note), NOT tied to a news event. It must be factually correct and responsible, and must NOT fabricate specific breaches, statistics, or current events as if they were news.
+
+Then these checks for BOTH kinds:
+1. Clarity: it is clear what is being said and why it matters.
+2. Tone: neutral and plain-spoken; free of clickbait, outrage framing, and ALL CAPS. (A light call-to-action like "save this" or "what do you think?" is fine.)
+3. Safety: nothing that would help someone run a scam or carry out an attack; no individualized professional (legal/medical/financial) advice.
+4. Format: 280 characters or fewer (a source link, if present, counts as 23), at most two hashtags.
+
+Respond with JSON:
+{
+  "quality": {
+    "passes": true,
+    "scores": {
+      "accuracy": 9,
+      "clarity": 9,
+      "tone": 9,
+      "safety": 10
+    },
+    "issues": [],
+    "suggestion": null
+  }
+}
+
+If passes is false, include specific issues and a short suggestion. scores are 1-10.
+Only fail the post for a genuine problem (especially an accuracy/faithfulness or safety problem). Do not be overly strict on style, and do NOT fail an evergreen post merely for lacking a source.

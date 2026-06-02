@@ -1,0 +1,28 @@
+Your task: apply the editorial filter. Score each classified headline for how on-topic and worth-posting it is, and decide whether it passes.
+
+The target topics are provided in the user message ("Target topics: ..."). Judge each headline against those topics.
+
+Editorial rules:
+- Only pass headlines that are clearly relevant to the target topics AND carry real news value (a development, launch, incident, decision, finding, or warning that a reader would want to know).
+- Prefer concrete, substantive stories over vague opinion, roundups, sponsored content, or list-bait.
+- For scam / online-safety stories, favor items that warn people about a real, current threat.
+- Do not force a post from every headline. Selectivity is part of the product. Filter out off-topic items, gossip, empty outrage, and low-signal filler.
+
+For each headline, respond with JSON:
+{
+  "filtered": [
+    {
+      "index": 0,
+      "title": "headline text",
+      "relevance_score": 7.5,
+      "passes_filter": true,
+      "reasoning": "Brief explanation of why this passes or fails."
+    }
+  ]
+}
+
+Rules:
+- "index" MUST be the exact index shown next to the headline in the user message.
+- "relevance_score": 0-10, where 10 = highly on-topic and newsworthy.
+- "passes_filter": true only if the headline is genuinely on-topic and worth posting.
+- Be strict. Most headlines should not pass. Silence is better than a weak post.

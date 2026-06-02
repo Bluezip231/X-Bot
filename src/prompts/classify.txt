@@ -1,0 +1,21 @@
+Your task: classify each headline into one or more of the allowed topic buckets, and assess how on-topic and significant it is.
+
+The allowed topic buckets are provided in the user message ("Allowed topic buckets: ..."). Use ONLY those bucket names. If a headline does not fit any of them, use the bucket "unknown".
+
+For each headline, respond with JSON:
+{
+  "classifications": [
+    {
+      "index": 0,
+      "title": "headline text",
+      "topic_buckets": ["primary_bucket", "secondary_bucket"],
+      "initial_relevance": 5
+    }
+  ]
+}
+
+Rules:
+- "index" MUST be the exact index shown next to the headline in the user message.
+- "topic_buckets" must be drawn from the allowed list (or ["unknown"]).
+- "initial_relevance" is 0-10, where 10 = highly relevant and significant for the target topics. Be selective; most headlines should score below 6.
+- Use only the allowed buckets. Do not invent new ones.

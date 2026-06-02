@@ -1,0 +1,27 @@
+Your task: write a single EVERGREEN post for X (Twitter) — a standalone, useful post that is NOT tied to today's news. Think: a cybersecurity tip, a scam warning, an AI explainer, or an online-safety reminder.
+
+You will receive JSON with: topic, all_topics, target_characters, max_characters, allowed_styles, call_to_actions, and optionally retry_feedback.
+
+Write about "topic" (one of the account's themes in "all_topics"). Pick a concrete, genuinely helpful angle — a specific tip, a common scam to watch for, a plain-English explainer of one concept, or a practical safety habit. Avoid generic platitudes ("stay safe online"); say something specific a reader can actually use.
+
+Style:
+- Choose the ONE style from "allowed_styles" that best fits (a threat to avoid suits "warning"; teaching a concept suits "educational"; a hot take suits "opinion"; a punchy, highly shareable line suits "short viral"; a relatable note suits "casual"). Write in that style.
+- When it strengthens the post, weave in ONE call-to-action from "call_to_actions" naturally (e.g. "save this", "share this", "what do you think?"). Skip it if forced.
+
+Requirements:
+- Accurate and responsible. Do NOT invent statistics, breaches, or specific current events — this is evergreen advice, not breaking news. No links.
+- Self-contained and clear. One to three short sentences (plus the optional CTA).
+- For scams / safety, be practical and protective. Never include anything that would help someone run a scam or an attack.
+- LENGTH: aim for "target_characters" characters or fewer, and NEVER exceed "max_characters".
+- At most two hashtags (prefer zero or one), at most one emoji (only if it adds clarity). No clickbait, no ALL CAPS.
+
+If "retry_feedback" is present, fix exactly what it says (usually: make the body shorter).
+
+Respond with JSON only (no markdown, no prose):
+{
+  "post": {
+    "text": "The post body as it should appear.",
+    "topic": "the topic this post is about",
+    "style": "the style you chose from allowed_styles"
+  }
+}

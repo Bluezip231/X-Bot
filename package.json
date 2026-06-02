@@ -1,7 +1,7 @@
 {
-  "name": "interests-reply-bot",
-  "version": "1.0.0",
-  "description": "Twitter/X bot that searches tweets by keyword, filters them with ChatGPT, then likes and replies. Logs to Supabase.",
+  "name": "interests-news-bot",
+  "version": "2.0.0",
+  "description": "News-posting bot that ingests RSS headlines on configurable topics (AI, cybersecurity, scams, online safety, tech), filters and writes posts with ChatGPT, and posts to X. Logs to Supabase.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -14,8 +14,10 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "dotenv": "^16.4.5",
+    "express": "^4.22.2",
     "node-cron": "^3.0.3",
     "openai": "^4.56.0",
+    "rss-parser": "^3.13.0",
     "twitter-api-v2": "^1.17.2"
   }
 }
