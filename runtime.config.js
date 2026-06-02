@@ -36,7 +36,13 @@ export const runtime = {
 
     // Hard cap on tweets posted per day (UTC). Once reached, the bot stops
     // posting for the rest of the day. (env: MAX_TWEETS_PER_DAY)
-    maxTweetsPerDay: 4,
+    maxTweetsPerDay: 12,
+
+    // How many tweets to post per scan — the top N distinct stories that pass
+    // the filter. Bounded by maxTweetsPerDay (the daily ceiling). With the
+    // hourly schedule, tweetsPerRun=1 + maxTweetsPerDay=4 means up to 4 posts a
+    // day, at most one an hour. (env: TWEETS_PER_RUN)
+    tweetsPerRun: 1,
 
     // Min relevance score (0-10) a headline needs to pass the editorial filter.
     // Higher = more selective. (env: EDITORIAL_THRESHOLD)
@@ -90,7 +96,9 @@ export const runtime = {
     // (env: CRON_TIMEZONE)
     cronTimezone: 'UTC',
 
-    // Run a single pass immediately on startup, then continue on schedule.
-    // (env: RUN_ON_STARTUP)
-    runOnStartup: true,
+    // Run a single pass immediately on startup. Keep this FALSE in production:
+    // Heroku restarts the dyno on every deploy, config-var change, and its daily
+    // cycle, and each restart would otherwise fire an immediate post. With it
+    // false the bot only posts on the cron schedule. (env: RUN_ON_STARTUP)
+    runOnStartup: false,
 };

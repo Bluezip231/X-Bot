@@ -17,15 +17,14 @@ import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 import { serializeError } from "../utils/serialize-error.js";
 
-// runNews() returns this when there's simply nothing fresh to post (as opposed
-// to a hard rejection), so the caller can fall back to an evergreen post.
+// runNews() returns this when there's nothing fresh to post (so the caller can
+// fall back to an evergreen post).
 const NO_NEWS = Symbol("no_news");
 
 /**
- * Run the pipeline once. Each run posts either NEWS (about a fresh headline) or
- * EVERGREEN content (a standalone tip/warning/explainer). Evergreen is chosen
- * for a configurable share of runs (config.evergreenRatio), and is also used as
- * a fallback when no fresh news passes the filter.
+ * Run one scan. Posts up to `tweetsPerRun` NEWS tweets (distinct top stories),
+ * or one EVERGREEN tweet — chosen by config.evergreenRatio, with evergreen as a
+ * fallback when no fresh news passes. Never exceeds maxTweetsPerDay.
  */
 export async function runPipeline(runType = "scheduled") {
   const stats = {
@@ -62,39 +61,29 @@ export async function runPipeline(runType = "scheduled") {
     }
   };
 
-  // Insert, post, mark published, finish. Dedup must be done by the caller.
-  const publishPost = async (post) => {
-    stats.postGenerated = true;
-    stats.details.kind = post.kind;
-    stats.details.style = post.style;
-
+  // Insert one post row, post it (unless dry run), mark published. Does NOT
+  // finish the pipeline run (a run may publish several). Returns { posted, ... }.
+  const publishOne = async (post) => {
     const dbResult = await insertPost({ ...post, dry_run: config.dryRun });
-    stats.postId = dbResult.id;
-
     const tweetId = await postTweet(post.full_text);
     if (tweetId) {
       await markPostPublished(dbResult.id, tweetId);
-      stats.postPublished = true;
-      stats.details.tweet_id = tweetId;
-    } else if (config.dryRun) {
-      stats.details.tweet_id = "dry-run";
-    } else {
-      stats.rejectionStage = "publish";
-      stats.rejectionReason = "twitter_post_failed";
+      logger.info(
+        { postId: dbResult.id, tweetId, kind: post.kind, style: post.style, text: post.full_text },
+        "Posted"
+      );
+      return { posted: true, tweetId, postId: dbResult.id };
     }
-
-    if (!stats.rejectionStage) stats.rejectionStage = "completed";
-    await finishPipelineRun(runId, stats);
-    logger.info(
-      { postId: dbResult.id, tweetId, kind: post.kind, style: post.style, text: post.full_text },
-      "Pipeline complete"
-    );
-    return post;
+    if (config.dryRun) {
+      // postTweet already logged "[DRY RUN] Would post"; count it for loop progress.
+      return { posted: true, tweetId: "dry-run", postId: dbResult.id };
+    }
+    return { posted: false, postId: dbResult.id };
   };
 
-  // NEWS path. Returns NO_NEWS when nothing fresh is available; otherwise the
-  // published post (success) or null (a hard rejection already finished the run).
-  const runNews = async () => {
+  // NEWS path: post up to `target` distinct top stories. Returns NO_NEWS if
+  // nothing landed (so the caller can fall back to evergreen).
+  const runNews = async (capacity) => {
     stats.details.mode = "news";
 
     const headlines = await ingest();
@@ -106,85 +95,91 @@ export async function runPipeline(runType = "scheduled") {
     stats.headlinesFiltered = filtered.length;
     if (filtered.length === 0) return NO_NEWS;
 
-    const topHeadline = filtered[0];
-    recordTopHeadline(topHeadline);
+    recordTopHeadline(filtered[0]);
 
-    const recentTweets = await getLastPublishedPosts(config.postDedupLookbackCount);
-    const dedupVerdict = await dedupCheck({ headline: topHeadline, recentTweets });
-    stats.details.dedup_check = {
-      lookback_count: recentTweets.length,
-      is_duplicate: dedupVerdict.is_duplicate,
-      matched_tweet_index: dedupVerdict.matched_tweet_index ?? null,
-      reasoning: dedupVerdict.reasoning || null,
-      ...(dedupVerdict.error ? { llm_error: dedupVerdict.error } : {}),
-    };
-    if (dedupVerdict.is_duplicate) {
-      logger.info(
-        { reasoning: dedupVerdict.reasoning, candidate_headline: topHeadline.title },
-        "Pipeline: dedup flagged candidate as already covered, skipping"
-      );
-      return reject("dedup", "Candidate news already covered by a recent post", {
-        candidate_headline: topHeadline.title,
-        candidate_url: topHeadline.url,
-        matched_tweet_text: dedupVerdict.matched_tweet_text,
-        reasoning: dedupVerdict.reasoning,
-        lookback_count: recentTweets.length,
-      });
+    const target = Math.min(config.tweetsPerRun, capacity);
+    const published = [];
+    const skipped = [];
+
+    for (const headline of filtered) {
+      if (published.length >= target) break;
+
+      // Dedup vs recent posts (re-queried each iteration so it also sees the
+      // ones we just posted this run).
+      const recent = await getLastPublishedPosts(config.postDedupLookbackCount);
+      const verdict = await dedupCheck({ headline, recentTweets: recent });
+      if (verdict.is_duplicate) {
+        skipped.push({ title: headline.title, reason: "duplicate", detail: verdict.reasoning });
+        continue;
+      }
+
+      const gen = await generatePost({ headline });
+      if (!gen.post) {
+        skipped.push({ title: headline.title, reason: gen.failure?.reason || "generate_failed" });
+        continue;
+      }
+
+      const qc = await qualityCheck(gen.post);
+      if (!qc.post) {
+        skipped.push({ title: headline.title, reason: qc.failure?.reason || "quality_failed" });
+        continue;
+      }
+
+      const res = await publishOne(qc.post);
+      if (res.posted) {
+        published.push({ tweet_id: res.tweetId, topic: qc.post.topic, style: qc.post.style, title: headline.title });
+        if (!stats.postId) stats.postId = res.postId;
+      } else {
+        skipped.push({ title: headline.title, reason: "twitter_post_failed" });
+      }
     }
 
-    const genResult = await generatePost({ headline: topHeadline });
-    if (!genResult.post) {
-      return reject("generate_post", genResult.failure?.reason || "generate_post_failed", {
-        generate_failure: genResult.failure?.details || null,
-      });
-    }
+    stats.postGenerated = published.length > 0;
+    stats.postPublished = published.length > 0;
+    stats.details.published_count = published.length;
+    stats.details.published = published;
+    if (skipped.length) stats.details.skipped = skipped;
 
-    const qcResult = await qualityCheck(genResult.post);
-    if (!qcResult.post) {
-      logger.warn("News post failed quality check, not publishing");
-      return reject("quality_check", qcResult.failure?.reason || "quality_check_failed", {
-        generated_post: { full_text: genResult.post.full_text },
-        quality_failure: qcResult.failure?.details || null,
-      });
-    }
-    if (qcResult.quality_scores) stats.details.quality_scores = qcResult.quality_scores;
+    if (published.length === 0) return NO_NEWS; // nothing landed → let caller try evergreen
 
-    return publishPost(qcResult.post);
+    stats.rejectionStage = "completed";
+    await finishPipelineRun(runId, stats);
+    logger.info({ count: published.length, target }, "News run complete");
+    return published;
   };
 
-  // EVERGREEN path. Writes a standalone post on a random configured topic, then
-  // dedups the generated text against recent posts so tips don't repeat.
+  // EVERGREEN path: one standalone post on a random configured topic.
   const runEvergreen = async () => {
     stats.details.mode = "evergreen";
     const topic = config.topics[Math.floor(Math.random() * config.topics.length)];
     stats.details.evergreen_topic = topic;
 
-    const genResult = await generateEvergreenPost({ topic });
-    if (!genResult.post) {
-      return reject("generate_post", genResult.failure?.reason || "generate_post_failed", {
-        generate_failure: genResult.failure?.details || null,
+    const gen = await generateEvergreenPost({ topic });
+    if (!gen.post) {
+      return reject("generate_post", gen.failure?.reason || "generate_post_failed", {
+        generate_failure: gen.failure?.details || null,
         evergreen_topic: topic,
       });
     }
 
-    const qcResult = await qualityCheck(genResult.post);
-    if (!qcResult.post) {
+    const qc = await qualityCheck(gen.post);
+    if (!qc.post) {
       logger.warn("Evergreen post failed quality check, not publishing");
-      return reject("quality_check", qcResult.failure?.reason || "quality_check_failed", {
-        generated_post: { full_text: genResult.post.full_text },
-        quality_failure: qcResult.failure?.details || null,
+      return reject("quality_check", qc.failure?.reason || "quality_check_failed", {
+        generated_post: { full_text: gen.post.full_text },
+        quality_failure: qc.failure?.details || null,
       });
     }
-    const checkedPost = qcResult.post;
-    if (qcResult.quality_scores) stats.details.quality_scores = qcResult.quality_scores;
+    const checked = qc.post;
+    if (qc.quality_scores) stats.details.quality_scores = qc.quality_scores;
 
-    const recentTweets = await getLastPublishedPosts(config.postDedupLookbackCount);
+    const recent = await getLastPublishedPosts(config.postDedupLookbackCount);
     const verdict = await dedupCheck({
-      headline: { title: checkedPost.full_text, description: `evergreen ${topic}` },
-      recentTweets,
+      headline: { title: checked.full_text, description: `evergreen ${topic}` },
+      recentTweets: recent,
     });
     stats.details.dedup_check = {
-      lookback_count: recentTweets.length,
+      lookback_count: recent.length,
       is_duplicate: verdict.is_duplicate,
       matched_tweet_index: verdict.matched_tweet_index ?? null,
       reasoning: verdict.reasoning || null,
@@ -199,13 +194,27 @@ export async function runPipeline(runType = "scheduled") {
       });
     }
 
-    return publishPost(checkedPost);
+    const res = await publishOne(checked);
+    stats.postGenerated = true;
+    stats.postPublished = !!res.posted;
+    stats.postId = res.postId;
+    stats.details.published_count = res.posted ? 1 : 0;
+    if (res.tweetId) stats.details.tweet_id = res.tweetId;
+    if (!res.posted && !config.dryRun) {
+      stats.rejectionStage = "publish";
+      stats.rejectionReason = "twitter_post_failed";
+    }
+    if (!stats.rejectionStage) stats.rejectionStage = "completed";
+    await finishPipelineRun(runId, stats);
+    logger.info({ kind: "evergreen", topic, tweetId: res.tweetId }, "Evergreen run complete");
+    return checked;
   };
 
   try {
-    // Daily post limit (UTC, excludes dry-run rows).
+    // Daily tweet limit (UTC, excludes dry-run rows).
     const todayCount = await getPostCountToday();
-    if (todayCount >= config.maxTweetsPerDay) {
+    const capacity = config.maxTweetsPerDay - todayCount;
+    if (capacity <= 0) {
       logger.info({ todayCount, max: config.maxTweetsPerDay }, "Daily tweet limit reached, skipping");
       return reject("daily_limit", "Daily tweet limit reached", {
         today_count: todayCount,
@@ -213,16 +222,15 @@ export async function runPipeline(runType = "scheduled") {
       });
     }
 
-    // Decide news vs evergreen for this run.
+    // News vs evergreen for this scan.
     if (Math.random() < config.evergreenRatio) {
       logger.info({ evergreenRatio: config.evergreenRatio }, "Evergreen run selected by ratio");
       return await runEvergreen();
     }
 
-    const newsResult = await runNews();
+    const newsResult = await runNews(capacity);
     if (newsResult !== NO_NEWS) return newsResult;
 
-    // No fresh news passed — don't waste the slot, post evergreen instead.
     logger.info("No fresh news passed the filter — falling back to evergreen");
     stats.details.fallback_to_evergreen = true;
     return await runEvergreen();

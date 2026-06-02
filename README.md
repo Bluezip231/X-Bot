@@ -49,6 +49,7 @@ Key `runtime.config.js` settings:
 | `topics`                 | AI, cybersecurity… | Topics the bot targets (drives classify + filter). |
 | `newsFeeds`              | 10 tech/sec feeds  | RSS/Atom sources to pull headlines from.           |
 | `maxTweetsPerDay`        | `4`                | Hard cap on tweets per day (UTC); then it stops.    |
+| `tweetsPerRun`           | `1`                | Tweets to post per scan (≤ daily cap).             |
 | `editorialThreshold`     | `6`                | Min relevance (0-10) to pass the filter.           |
 | `postDedupLookbackCount` | `5`                | Recent posts the dedup step compares against.      |
 | `includeSourceLink`      | `true`             | Append the source article link to each post.       |
@@ -58,7 +59,7 @@ Key `runtime.config.js` settings:
 | `dryRun`                 | `true`             | `true` = run everything but don't post to X.       |
 | `cronSchedule`           | `0 * * * *`        | How often to check for news (5-field cron).        |
 | `cronTimezone`           | `UTC`              | IANA timezone for the schedule.                    |
-| `runOnStartup`           | `true`             | Run one pass immediately on boot.                  |
+| `runOnStartup`           | `false`            | Post once on boot too (every restart). Keep false.  |
 
 Env-only secrets: `TWITTER_APP_KEY/_SECRET`, `TWITTER_ACCESS_TOKEN/_SECRET`,
 `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and optional

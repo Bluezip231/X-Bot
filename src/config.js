@@ -98,6 +98,8 @@ export const config = {
   // Topics the bot targets (injected into the classify/filter prompts).
   topics,
   maxTweetsPerDay: envInt("MAX_TWEETS_PER_DAY", runtime.maxTweetsPerDay),
+  // How many tweets to post per scan (bounded by maxTweetsPerDay).
+  tweetsPerRun: Math.max(1, envInt("TWEETS_PER_RUN", runtime.tweetsPerRun)),
   editorialThreshold: envInt("EDITORIAL_THRESHOLD", runtime.editorialThreshold),
   postDedupLookbackCount: envInt("POST_DEDUP_LOOKBACK_COUNT", runtime.postDedupLookbackCount),
   includeSourceLink: envBool("INCLUDE_SOURCE_LINK", runtime.includeSourceLink),
