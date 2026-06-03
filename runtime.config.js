@@ -14,7 +14,7 @@ export const runtime = {
     // Topics the bot targets. The model classifies and filters headlines against
     // this list, so changing it changes what the bot posts about. (env: TOPICS,
     // comma-separated)
-    topics: ['AI', 'cybersecurity', 'scams', 'online safety', 'tech'],
+    topics: ['AI', 'cybersecurity', 'scams', 'online safety', 'tech', 'web design'],
 
     // RSS/Atom feeds to pull headlines from. Add/remove freely. (Not overridable
     // via env — edit here.)
@@ -29,24 +29,27 @@ export const runtime = {
         { name: 'MIT Technology Review', url: 'https://www.technologyreview.com/feed/' },
         { name: 'The Register', url: 'https://www.theregister.com/headlines.atom' },
         { name: 'VentureBeat', url: 'https://venturebeat.com/feed/' },
+        { name: 'Smashing Magazine', url: 'https://www.smashingmagazine.com/feed/' },
     ],
 
     // Max headlines pulled from each feed per run. (env: PER_FEED_LIMIT)
     perFeedLimit: 15,
 
     // Hard cap on tweets posted per day (UTC). Once reached, the bot stops
-    // posting for the rest of the day. (env: MAX_TWEETS_PER_DAY)
-    maxTweetsPerDay: 12,
+    // posting for the rest of the day. Kept low on purpose — we'd rather post a
+    // few strong tweets than many weak ones. (env: MAX_TWEETS_PER_DAY)
+    maxTweetsPerDay: 5,
 
     // How many tweets to post per scan — the top N distinct stories that pass
     // the filter. Bounded by maxTweetsPerDay (the daily ceiling). With the
-    // hourly schedule, tweetsPerRun=1 + maxTweetsPerDay=4 means up to 4 posts a
-    // day, at most one an hour. (env: TWEETS_PER_RUN)
+    // every-3-hours schedule, tweetsPerRun=1 + maxTweetsPerDay=5 means up to 5
+    // posts a day, spread out, at most one every 3 hours. (env: TWEETS_PER_RUN)
     tweetsPerRun: 1,
 
     // Min relevance score (0-10) a headline needs to pass the editorial filter.
-    // Higher = more selective. (env: EDITORIAL_THRESHOLD)
-    editorialThreshold: 6,
+    // Higher = more selective. Set high so only strong, genuinely interesting
+    // stories get posted. (env: EDITORIAL_THRESHOLD)
+    editorialThreshold: 8,
 
     // How many recent posts the LLM dedup step compares a candidate against.
     // (env: POST_DEDUP_LOOKBACK_COUNT)
@@ -64,9 +67,16 @@ export const runtime = {
     callToActions: ['share this', 'watch for this', 'save this', 'what do you think?'],
 
     // Share of runs that post EVERGREEN content (tips / warnings / explainers /
-    // safety) instead of news, 0-1. A run also falls back to evergreen when no
-    // fresh news passes the filter. (env: EVERGREEN_RATIO)
-    evergreenRatio: 0.3,
+    // safety) instead of news, 0-1. Set to 0 so evergreen is FALLBACK ONLY: the
+    // bot prefers real news, and only posts a standalone tip when no fresh news
+    // passes the filter (so a slow day isn't completely silent). (env: EVERGREEN_RATIO)
+    evergreenRatio: 0,
+
+    // Max evergreen FALLBACK posts per day (UTC). On a slow news day the bot
+    // would otherwise post a generic tip every run; this caps how many of those
+    // standalone tips it will post, so the feed stays mostly real news.
+    // (env: MAX_EVERGREEN_PER_DAY)
+    maxEvergreenPerDay: 1,
 
     // Prune headlines and pipeline_runs older than this many days. (env: CLEANUP_DAYS)
     cleanupDays: 7,
@@ -87,10 +97,11 @@ export const runtime = {
     dryRun: false,
 
     // Internal scheduler — standard 5-field cron. Default: check for fresh news
-    // every hour (it only posts when something is actually worth sharing, up to
-    // maxTweetsPerDay). (env: CRON_SCHEDULE)
-    //   "0 * * * *" -> every hour   |   "0 */3 * * *" -> every 3 hours
-    cronSchedule: '0 * * * *',
+    // every 3 hours (it only posts when something is actually worth sharing, up
+    // to maxTweetsPerDay), so posts are spread across the day instead of
+    // clustered. (env: CRON_SCHEDULE)
+    //   "0 */3 * * *" -> every 3 hours   |   "0 * * * *" -> every hour
+    cronSchedule: '0 */3 * * *',
 
     // Timezone for the cron schedule (IANA name, e.g. America/New_York, UTC).
     // (env: CRON_TIMEZONE)

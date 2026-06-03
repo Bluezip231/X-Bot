@@ -91,18 +91,23 @@ export async function markPostPublished(postId, tweetId) {
 
 /**
  * Count posts that count toward the daily limit: actually published, and not
- * dry-run rows. Uses UTC midnight as the day boundary.
+ * dry-run rows. Uses UTC midnight as the day boundary. Pass { kind } to count
+ * only a single kind (e.g. "evergreen") — used to cap evergreen fallbacks.
  */
-export async function getPostCountToday() {
+export async function getPostCountToday({ kind } = {}) {
   const startOfDay = new Date();
   startOfDay.setUTCHours(0, 0, 0, 0);
 
-  const { count, error } = await supabase
+  let query = supabase
     .from("posts")
     .select("*", { count: "exact", head: true })
     .eq("published", true)
     .eq("dry_run", false)
     .gte("created_at", startOfDay.toISOString());
+
+  if (kind) query = query.eq("kind", kind);
+
+  const { count, error } = await query;
 
   if (error) {
     logger.warn({ error: error.message }, "getPostCountToday failed");

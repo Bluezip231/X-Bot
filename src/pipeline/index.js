@@ -231,6 +231,21 @@ export async function runPipeline(runType = "scheduled") {
     const newsResult = await runNews(capacity);
     if (newsResult !== NO_NEWS) return newsResult;
 
+    // No fresh news. Fall back to a standalone evergreen tip — but only up to
+    // maxEvergreenPerDay, so a slow news day doesn't fill the feed with generic
+    // tips. Once that cap is hit, stay silent until real news shows up.
+    const evergreenToday = await getPostCountToday({ kind: "evergreen" });
+    if (evergreenToday >= config.maxEvergreenPerDay) {
+      logger.info(
+        { evergreenToday, max: config.maxEvergreenPerDay },
+        "No fresh news and evergreen fallback cap reached — skipping"
+      );
+      return reject("no_news", "No fresh news and evergreen cap reached", {
+        evergreen_today: evergreenToday,
+        max_evergreen_per_day: config.maxEvergreenPerDay,
+      });
+    }
+
     logger.info("No fresh news passed the filter — falling back to evergreen");
     stats.details.fallback_to_evergreen = true;
     return await runEvergreen();

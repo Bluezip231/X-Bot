@@ -24,8 +24,9 @@ function truncateAtWord(text, max) {
  * the final post object.
  */
 async function generate({ promptFile, baseInput, limit, buildPost, label }) {
-  // Aim well under the hard cap — LLMs overshoot exact character counts.
-  const target = Math.max(80, limit - 24);
+  // Aim well under the hard cap — LLMs overshoot exact character counts, so give
+  // a generous buffer (they tend to land ~30-50 chars over the stated target).
+  const target = Math.max(80, limit - 50);
   const input = {
     ...baseInput,
     target_characters: target,

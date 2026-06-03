@@ -6,13 +6,16 @@ Write about "topic" (one of the account's themes in "all_topics"). Pick a concre
 
 Style:
 - Choose the ONE style from "allowed_styles" that best fits (a threat to avoid suits "warning"; teaching a concept suits "educational"; a hot take suits "opinion"; a punchy, highly shareable line suits "short viral"; a relatable note suits "casual"). Write in that style.
-- When it strengthens the post, weave in ONE call-to-action from "call_to_actions" naturally (e.g. "save this", "share this", "what do you think?"). Skip it if forced.
+- Open with a hook and match the account's voice from the persona examples (dry, plain-English, quietly confident). Myth-busting framing works well for tips.
+- TONE: understated, not cheesy. No exclamation-mark hype, no pep-talk filler ("Buckle up", "folks", "watch the magic happen"), no decorative emojis. Let the point land flat and sharp.
+- Vary your wording, openings, and structure — never a template, and never a recurring stock sign-off like "Watch for this."
+- DEFAULT TO NO CALL-TO-ACTION. Most posts should just land the point and stop — no closing question, no sign-off. Only occasionally add a CTA when it genuinely fits, varied and natural ("bookmark this", "worth knowing"). Do NOT default to "What do you think?" — it is overused.
 
 Requirements:
 - Accurate and responsible. Do NOT invent statistics, breaches, or specific current events — this is evergreen advice, not breaking news. No links.
 - Self-contained and clear. One to three short sentences (plus the optional CTA).
 - For scams / safety, be practical and protective. Never include anything that would help someone run a scam or an attack.
-- LENGTH: aim for "target_characters" characters or fewer, and NEVER exceed "max_characters".
+- HARD LENGTH LIMIT (most important): the post MUST be at most "max_characters" characters — count them. X rejects anything over its limit, so an over-length post does not get posted at all. Aim for "target_characters" or fewer; shorter is better. The long thread-style examples in the persona are for VOICE only — this is ONE short tweet, not a thread.
 - At most two hashtags (prefer zero or one), at most one emoji (only if it adds clarity). No clickbait, no ALL CAPS.
 
 If "retry_feedback" is present, fix exactly what it says (usually: make the body shorter).

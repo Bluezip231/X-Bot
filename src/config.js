@@ -109,6 +109,8 @@ export const config = {
   callToActions: envList("CALL_TO_ACTIONS", runtime.callToActions),
   // Share of runs (0-1) that post evergreen content instead of news.
   evergreenRatio: Math.min(1, Math.max(0, envFloat("EVERGREEN_RATIO", runtime.evergreenRatio))),
+  // Max evergreen FALLBACK posts per day (caps generic tips on slow news days).
+  maxEvergreenPerDay: Math.max(0, envInt("MAX_EVERGREEN_PER_DAY", runtime.maxEvergreenPerDay)),
   // How far back the daily engagement refresh updates metrics.
   metricsLookbackDays: envInt("METRICS_LOOKBACK_DAYS", runtime.metricsLookbackDays),
   // Engagement dashboard (served on the public Heroku URL).
