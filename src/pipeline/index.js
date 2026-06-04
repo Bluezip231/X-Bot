@@ -9,10 +9,12 @@ import {
   markPostPublished,
   getPostCountToday,
   getLastPublishedPosts,
+  getLastPublishedAt,
   insertPipelineRun,
   finishPipelineRun,
 } from "../db.js";
 import { postTweet } from "../services/twitter-client.js";
+import { getTopStyles } from "../insights.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 import { serializeError } from "../utils/serialize-error.js";
@@ -82,8 +84,9 @@ export async function runPipeline(runType = "scheduled") {
   };
 
   // NEWS path: post up to `target` distinct top stories. Returns NO_NEWS if
-  // nothing landed (so the caller can fall back to evergreen).
-  const runNews = async (capacity) => {
+  // nothing landed (so the caller can fall back to evergreen). `topStyles` is a
+  // soft engagement signal passed to the generator (may be empty).
+  const runNews = async (capacity, topStyles) => {
     stats.details.mode = "news";
 
     const headlines = await ingest();
@@ -113,7 +116,7 @@ export async function runPipeline(runType = "scheduled") {
         continue;
       }
 
-      const gen = await generatePost({ headline });
+      const gen = await generatePost({ headline, topStyles });
       if (!gen.post) {
         skipped.push({ title: headline.title, reason: gen.failure?.reason || "generate_failed" });
         continue;
@@ -211,7 +214,10 @@ export async function runPipeline(runType = "scheduled") {
   };
 
   try {
-    // Daily tweet limit (UTC, excludes dry-run rows).
+    // --- Cheap gates first: bail out BEFORE any ingest / LLM calls so a scan
+    // that can't post costs nothing. ---
+
+    // Daily tweet limit (day boundary = local midnight in the configured tz).
     const todayCount = await getPostCountToday();
     const capacity = config.maxTweetsPerDay - todayCount;
     if (capacity <= 0) {
@@ -222,13 +228,36 @@ export async function runPipeline(runType = "scheduled") {
       });
     }
 
+    // Minimum spacing between posts, so the day's tweets are spread out instead
+    // of clustered in the first few scans. Only enforced for scheduled runs —
+    // manual/--once runs (testing) bypass it.
+    if (runType === "scheduled" && config.minPostSpacingMinutes > 0) {
+      const lastAt = await getLastPublishedAt();
+      if (lastAt) {
+        const minsSince = (Date.now() - lastAt.getTime()) / 60000;
+        if (minsSince < config.minPostSpacingMinutes) {
+          logger.info(
+            { minsSince: Math.round(minsSince), minSpacing: config.minPostSpacingMinutes },
+            "Minimum post spacing not met, skipping"
+          );
+          return reject("min_spacing", "Minimum spacing since last post not met", {
+            minutes_since_last_post: Math.round(minsSince),
+            min_post_spacing_minutes: config.minPostSpacingMinutes,
+          });
+        }
+      }
+    }
+
     // News vs evergreen for this scan.
     if (Math.random() < config.evergreenRatio) {
       logger.info({ evergreenRatio: config.evergreenRatio }, "Evergreen run selected by ratio");
       return await runEvergreen();
     }
 
-    const newsResult = await runNews(capacity);
+    // Soft engagement signal: styles that have historically performed best.
+    const topStyles = await getTopStyles();
+
+    const newsResult = await runNews(capacity, topStyles);
     if (newsResult !== NO_NEWS) return newsResult;
 
     // No fresh news. Fall back to a standalone evergreen tip — but only up to
