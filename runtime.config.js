@@ -38,11 +38,11 @@ export const runtime = {
     // Hard cap on tweets posted per day (UTC). Once reached, the bot stops
     // posting for the rest of the day. Kept low on purpose — we'd rather post a
     // few strong tweets than many weak ones. (env: MAX_TWEETS_PER_DAY)
-    maxTweetsPerDay: 5,
+    maxTweetsPerDay: 3,
 
     // How many tweets to post per scan — the top N distinct stories that pass
     // the filter. Bounded by maxTweetsPerDay (the daily ceiling). With the
-    // every-3-hours schedule, tweetsPerRun=1 + maxTweetsPerDay=5 means up to 5
+    // every-3-hours schedule, tweetsPerRun=1 + maxTweetsPerDay=3 means up to 3
     // posts a day, spread out, at most one every 3 hours. (env: TWEETS_PER_RUN)
     tweetsPerRun: 1,
 

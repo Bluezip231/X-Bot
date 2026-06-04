@@ -49,7 +49,7 @@ Key `runtime.config.js` settings:
 | ------------------------ | ------------------ | -------------------------------------------------- |
 | `topics`                 | AI, cybersecurity… | Topics the bot targets (drives classify + filter). |
 | `newsFeeds`              | 11 tech/sec feeds  | RSS/Atom sources to pull headlines from.           |
-| `maxTweetsPerDay`        | `5`                | Hard cap on tweets per day (UTC); then it stops.    |
+| `maxTweetsPerDay`        | `3`                | Hard cap on tweets per day (UTC); then it stops.    |
 | `tweetsPerRun`           | `1`                | Tweets to post per scan (≤ daily cap).             |
 | `editorialThreshold`     | `8`                | Min relevance (0-10) to pass the filter (strict).  |
 | `postDedupLookbackCount` | `5`                | Recent posts the dedup step compares against.      |
@@ -171,7 +171,7 @@ vars).
 ## Notes
 
 - Credentials are read from env vars only — nothing is hard-coded.
-- Free X API tier caps writes (~17/day); the default `maxTweetsPerDay: 5` is well
+- Free X API tier caps writes (~17/day); the default `maxTweetsPerDay: 3` is well
   under that.
 - Post length uses X's weighting (a link counts as 23 chars); the generator
   budgets the body to ~256 chars when a link is appended.
