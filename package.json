@@ -7,6 +7,9 @@
   "scripts": {
     "start": "node src/index.js",
     "once": "node src/index.js --once",
+    "post": "node src/index.js --post",
+    "refresh": "node src/index.js --refresh",
+    "cleanup": "node src/index.js --cleanup",
     "test": "node --test \"test/**/*.test.js\""
   },
   "engines": {

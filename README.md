@@ -140,7 +140,46 @@ is pulled from the X API once a day; brand-new posts read 0 until the next
 refresh. Access requires `DASHBOARD_USER` + `DASHBOARD_PASS` (if unset, the page
 returns 503 — never accidentally public). `/healthz` is open for uptime checks.
 
-## Deploy to Heroku
+## Run on GitHub Actions (recommended, free)
+
+Instead of an always-on host, the bot can run as periodic one-shot invocations
+on GitHub's scheduler. Each invocation does one task and exits; all state (daily
+cap, post spacing, dedup) lives in Supabase, so isolated runs behave exactly
+like the old internal scheduler. Three workflows live in
+[`.github/workflows/`](.github/workflows):
+
+| Workflow          | Schedule (UTC) | Command                     |
+| ----------------- | -------------- | --------------------------- |
+| `post.yml`        | every 3 hours  | `node src/index.js --post`    |
+| `engagement.yml`  | daily 02:00    | `node src/index.js --refresh` |
+| `cleanup.yml`     | daily 03:00    | `node src/index.js --cleanup` |
+
+Setup:
+
+1. Add your secrets in the repo under **Settings → Secrets and variables →
+   Actions → New repository secret** (each as its own secret):
+   `TWITTER_APP_KEY`, `TWITTER_APP_SECRET`, `TWITTER_ACCESS_TOKEN`,
+   `TWITTER_ACCESS_SECRET`, `OPENAI_API_KEY`, `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY` (and optional `THENEWSAPI_KEY`).
+2. (Optional) Add a repo **variable** `DRY_RUN=true` to test posting without
+   actually tweeting; remove it to go live.
+3. Scheduled workflows only fire once these files are on the **default branch**
+   (`main`). You can trigger any of them manually from the **Actions** tab
+   ("Run workflow") to test.
+
+Notes:
+- GitHub cron is UTC and best-effort (runs can be delayed a few minutes under
+  load) — fine for a few posts a day.
+- These run-once modes are also handy locally: `npm run post`, `npm run refresh`,
+  `npm run cleanup`.
+- The hosted dashboard is **not** available in this mode (it needs an always-on
+  server) — engagement data still accumulates in Supabase. See below.
+
+## Deploy to Heroku (alternative — always-on, keeps the dashboard)
+
+The bot also still runs as a single always-on **web** dyno that serves the
+dashboard and runs the internal cron. Use this instead of GitHub Actions if you
+want the hosted dashboard.
 
 ```bash
 heroku create your-bot-name
@@ -156,14 +195,12 @@ git push heroku main
 # runs the scheduler. Use the Basic tier so it never sleeps:
 heroku ps:type web=basic
 heroku ps:scale web=1
-# If you previously ran a worker dyno, turn it off so the bot doesn't post twice:
-heroku ps:scale worker=0
 ```
 
-The web dyno stays up, posts on `CRON_SCHEDULE`, refreshes engagement daily, and
-serves the dashboard. Watch it with `heroku logs --tail`. To tune
-topics/feeds/schedule, edit `runtime.config.js` and push (or override via config
-vars).
+> **Don't run both at once.** If the Heroku dyno is up *and* the GitHub Actions
+> workflows are enabled, both will try to post. Pick one — if you move to GitHub
+> Actions, scale the dyno down with `heroku ps:scale web=0` (or toggle it off in
+> the dashboard).
 
 ## Logs & data (Supabase)
 
