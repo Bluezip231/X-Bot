@@ -100,6 +100,8 @@ export const config = {
   maxTweetsPerDay: envInt("MAX_TWEETS_PER_DAY", runtime.maxTweetsPerDay),
   // How many tweets to post per scan (bounded by maxTweetsPerDay).
   tweetsPerRun: Math.max(1, envInt("TWEETS_PER_RUN", runtime.tweetsPerRun)),
+  // Minimum minutes between published posts (0 disables). Spreads posts out.
+  minPostSpacingMinutes: Math.max(0, envInt("MIN_POST_SPACING_MINUTES", runtime.minPostSpacingMinutes)),
   editorialThreshold: envInt("EDITORIAL_THRESHOLD", runtime.editorialThreshold),
   postDedupLookbackCount: envInt("POST_DEDUP_LOOKBACK_COUNT", runtime.postDedupLookbackCount),
   includeSourceLink: envBool("INCLUDE_SOURCE_LINK", runtime.includeSourceLink),
@@ -113,6 +115,13 @@ export const config = {
   maxEvergreenPerDay: Math.max(0, envInt("MAX_EVERGREEN_PER_DAY", runtime.maxEvergreenPerDay)),
   // How far back the daily engagement refresh updates metrics.
   metricsLookbackDays: envInt("METRICS_LOOKBACK_DAYS", runtime.metricsLookbackDays),
+  // Engagement feedback: bias new posts toward historically best-performing
+  // styles (soft signal; no effect until posts have accumulated metrics).
+  styleFeedback: {
+    enabled: envBool("STYLE_FEEDBACK_ENABLED", runtime.styleFeedbackEnabled),
+    lookbackDays: envInt("STYLE_FEEDBACK_DAYS", runtime.styleFeedbackDays),
+    minPosts: Math.max(1, envInt("STYLE_FEEDBACK_MIN_POSTS", runtime.styleFeedbackMinPosts)),
+  },
   // Engagement dashboard (served on the public Heroku URL).
   dashboard: {
     // HTTP basic-auth credentials (secrets, env-only). If unset, the dashboard

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { config } from "./config.js";
 import { logger } from "./utils/logger.js";
+import { startOfDayInTimeZone } from "./utils/time.js";
 
 let supabase;
 
@@ -91,12 +92,12 @@ export async function markPostPublished(postId, tweetId) {
 
 /**
  * Count posts that count toward the daily limit: actually published, and not
- * dry-run rows. Uses UTC midnight as the day boundary. Pass { kind } to count
- * only a single kind (e.g. "evergreen") — used to cap evergreen fallbacks.
+ * dry-run rows. The day boundary is local midnight in config.cron.timezone
+ * (defaults to UTC), so "today" tracks the audience's clock. Pass { kind } to
+ * count only a single kind (e.g. "evergreen") — used to cap evergreen fallbacks.
  */
 export async function getPostCountToday({ kind } = {}) {
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
+  const startOfDay = startOfDayInTimeZone(config.cron.timezone);
 
   let query = supabase
     .from("posts")
@@ -130,6 +131,49 @@ export async function getLastPublishedPosts(limit = 5) {
 
   if (error) {
     logger.warn({ error: error.message }, "getLastPublishedPosts failed");
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * When the most recent real (non-dry-run) post was published, as a Date, or
+ * null if there are none. Used to enforce minimum spacing between posts so the
+ * day's tweets are spread out rather than clustered.
+ */
+export async function getLastPublishedAt() {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("created_at")
+    .eq("published", true)
+    .eq("dry_run", false)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    logger.warn({ error: error.message }, "getLastPublishedAt failed");
+    return null;
+  }
+  return data && data[0] ? new Date(data[0].created_at) : null;
+}
+
+/**
+ * Engagement rows (style + like/reply/retweet counts) for real, published posts
+ * in the last `daysBack` days. Feeds the style-performance ranking used to bias
+ * future posts toward what performs best.
+ */
+export async function getStyleEngagement(daysBack = 21) {
+  const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("posts")
+    .select("style, like_count, reply_count, retweet_count")
+    .eq("published", true)
+    .eq("dry_run", false)
+    .not("tweet_id", "is", null)
+    .gte("created_at", since);
+
+  if (error) {
+    logger.warn({ error: error.message }, "getStyleEngagement failed");
     return [];
   }
   return data || [];

@@ -1,21 +1,12 @@
 import { runPrompt } from "../services/openai-client.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
+import { truncateAtWord } from "../utils/text.js";
 
 const MAX_RETRIES = 2;
 const TWEET_LIMIT = 280;
 // A t.co link always counts as 23 chars; reserve 23 + 1 for the separator.
 const LINK_RESERVE = 24;
-
-// Last-resort: trim an over-long body to the limit at a word boundary so a
-// slightly-long post still ships instead of being dropped entirely.
-function truncateAtWord(text, max) {
-  if (text.length <= max) return text;
-  const slice = text.slice(0, max - 1); // leave room for the ellipsis
-  const lastSpace = slice.lastIndexOf(" ");
-  const base = lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice;
-  return base.replace(/[\s,.;:!?-]+$/, "") + "…";
-}
 
 /**
  * Shared retry loop. The model returns body text only; we validate length
@@ -91,7 +82,7 @@ async function generate({ promptFile, baseInput, limit, buildPost, label }) {
  * News post: written about a specific headline. Appends the source link when
  * configured (and budgets the body for it).
  */
-export async function generatePost({ headline }) {
+export async function generatePost({ headline, topStyles = [] }) {
   const hasLink = config.includeSourceLink && !!headline.url;
   const limit = hasLink ? TWEET_LIMIT - LINK_RESERVE : TWEET_LIMIT;
 
@@ -111,6 +102,9 @@ export async function generatePost({ headline }) {
       headline: headline.title,
       description: headline.description || "",
       topic_buckets: headline.topic_buckets || [],
+      // Soft engagement signal: styles that have historically performed best.
+      // Omitted entirely when there isn't enough data yet.
+      ...(topStyles.length ? { top_performing_styles: topStyles } : {}),
     },
     limit,
     buildPost,

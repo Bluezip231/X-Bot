@@ -38,13 +38,21 @@ export const runtime = {
     // Hard cap on tweets posted per day (UTC). Once reached, the bot stops
     // posting for the rest of the day. Kept low on purpose — we'd rather post a
     // few strong tweets than many weak ones. (env: MAX_TWEETS_PER_DAY)
-    maxTweetsPerDay: 5,
+    maxTweetsPerDay: 3,
 
     // How many tweets to post per scan — the top N distinct stories that pass
     // the filter. Bounded by maxTweetsPerDay (the daily ceiling). With the
-    // every-3-hours schedule, tweetsPerRun=1 + maxTweetsPerDay=5 means up to 5
+    // every-3-hours schedule, tweetsPerRun=1 + maxTweetsPerDay=3 means up to 3
     // posts a day, spread out, at most one every 3 hours. (env: TWEETS_PER_RUN)
     tweetsPerRun: 1,
+
+    // Minimum minutes between published posts. Spreads the day's tweets out
+    // instead of letting them cluster in the first few scans that find good
+    // news. With the every-3-hours scan and maxTweetsPerDay=3, 360 (6h) yields
+    // up to 3 posts roughly evenly across the day. Set to 0 to disable spacing
+    // (post as soon as something qualifies, up to the daily cap). Only enforced
+    // for scheduled runs — manual/--once runs ignore it. (env: MIN_POST_SPACING_MINUTES)
+    minPostSpacingMinutes: 360,
 
     // Min relevance score (0-10) a headline needs to pass the editorial filter.
     // Higher = more selective. Set high so only strong, genuinely interesting
@@ -77,6 +85,18 @@ export const runtime = {
     // standalone tips it will post, so the feed stays mostly real news.
     // (env: MAX_EVERGREEN_PER_DAY)
     maxEvergreenPerDay: 1,
+
+    // Engagement feedback: bias new posts toward the styles that have earned the
+    // most engagement (likes + replies + retweets). It's a SOFT signal — the
+    // generator still picks the style that best fits each story; this only
+    // breaks ties toward proven winners. Has no effect until enough posts have
+    // accumulated metrics. (env: STYLE_FEEDBACK_ENABLED)
+    styleFeedbackEnabled: true,
+    // How many days of post history to rank styles over. (env: STYLE_FEEDBACK_DAYS)
+    styleFeedbackDays: 21,
+    // A style must have at least this many posts in the window before it's
+    // ranked, so one lucky post doesn't skew the signal. (env: STYLE_FEEDBACK_MIN_POSTS)
+    styleFeedbackMinPosts: 3,
 
     // Prune headlines and pipeline_runs older than this many days. (env: CLEANUP_DAYS)
     cleanupDays: 7,

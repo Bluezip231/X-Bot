@@ -25,7 +25,10 @@ and caps fallback tips at `maxEvergreenPerDay` so the feed stays mostly news.
 It also serves a **password-protected engagement dashboard** on the app's public
 URL: every published post's likes/replies/retweets are refreshed daily from the X
 API, and the dashboard ranks **topics** (and styles, and news-vs-evergreen) by
-engagement, per week — so you can see what's performing best.
+engagement, per week — so you can see what's performing best. That same
+engagement signal is fed back into generation: the writer is nudged toward the
+**styles** that have historically earned the most engagement (a soft tie-breaker
+— fit always wins). See `styleFeedback*` in the config.
 
 Scheduling and the dashboard run together in one process on a single Heroku
 **web** dyno (Basic tier, which never sleeps). `node-cron` handles posting, the
@@ -49,8 +52,9 @@ Key `runtime.config.js` settings:
 | ------------------------ | ------------------ | -------------------------------------------------- |
 | `topics`                 | AI, cybersecurity… | Topics the bot targets (drives classify + filter). |
 | `newsFeeds`              | 11 tech/sec feeds  | RSS/Atom sources to pull headlines from.           |
-| `maxTweetsPerDay`        | `5`                | Hard cap on tweets per day (UTC); then it stops.    |
+| `maxTweetsPerDay`        | `3`                | Hard cap on tweets per day; then it stops. Day boundary is local midnight in `cronTimezone`. |
 | `tweetsPerRun`           | `1`                | Tweets to post per scan (≤ daily cap).             |
+| `minPostSpacingMinutes`  | `360`              | Min minutes between posts, so the day's tweets spread out instead of clustering (`0` disables). |
 | `editorialThreshold`     | `8`                | Min relevance (0-10) to pass the filter (strict).  |
 | `postDedupLookbackCount` | `5`                | Recent posts the dedup step compares against.      |
 | `includeSourceLink`      | `true`             | Append the source article link to each post.       |
@@ -58,6 +62,9 @@ Key `runtime.config.js` settings:
 | `maxEvergreenPerDay`     | `1`                | Cap on evergreen fallback tips per day (UTC).      |
 | `postStyles`             | 5 styles           | Styles the model may write in (it picks best fit).  |
 | `callToActions`          | 4 CTAs             | Engagement phrases the model may rarely weave in.   |
+| `styleFeedbackEnabled`   | `true`             | Bias posts toward the styles earning the most engagement (soft; needs data). |
+| `styleFeedbackDays`      | `21`               | History window the style ranking is computed over.  |
+| `styleFeedbackMinPosts`  | `3`                | Min posts a style needs before it's ranked.         |
 | `dryRun`                 | `false`            | `true` = run everything but don't post to X.       |
 | `cronSchedule`           | `0 */3 * * *`      | How often to check for news (5-field cron).        |
 | `cronTimezone`           | `UTC`              | IANA timezone for the schedule.                    |
@@ -113,6 +120,16 @@ npm start
 ```
 This also serves the dashboard locally at `http://localhost:3000/dashboard`
 (set `DASHBOARD_USER`/`DASHBOARD_PASS` in `.env` to view it).
+
+## Tests
+
+Unit tests cover the pure logic (length/guardrail checks, tweet truncation,
+timezone day-boundary math, and the engagement style ranking). They use Node's
+built-in test runner — no dependencies or API keys needed:
+
+```bash
+npm test
+```
 
 ## Dashboard
 
@@ -171,7 +188,7 @@ vars).
 ## Notes
 
 - Credentials are read from env vars only — nothing is hard-coded.
-- Free X API tier caps writes (~17/day); the default `maxTweetsPerDay: 5` is well
+- Free X API tier caps writes (~17/day); the default `maxTweetsPerDay: 3` is well
   under that.
 - Post length uses X's weighting (a link counts as 23 chars); the generator
   budgets the body to ~256 chars when a link is appended.
