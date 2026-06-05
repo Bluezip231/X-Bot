@@ -83,7 +83,10 @@ async function generate({ promptFile, baseInput, limit, buildPost, label }) {
  * configured (and budgets the body for it).
  */
 export async function generatePost({ headline, topStyles = [] }) {
-  const hasLink = config.includeSourceLink && !!headline.url;
+  // Only link out on a fraction of posts — a link card under every tweet is a
+  // dead giveaway that an account is automated.
+  const hasLink =
+    config.includeSourceLink && !!headline.url && Math.random() < config.sourceLinkRatio;
   const limit = hasLink ? TWEET_LIMIT - LINK_RESERVE : TWEET_LIMIT;
 
   const buildPost = (body, model) => ({
