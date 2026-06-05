@@ -63,12 +63,31 @@ export const runtime = {
     // (env: POST_DEDUP_LOOKBACK_COUNT)
     postDedupLookbackCount: 5,
 
-    // Append the source article link to each post. (env: INCLUDE_SOURCE_LINK)
+    // Master switch for appending the source article link. (env: INCLUDE_SOURCE_LINK)
     includeSourceLink: true,
 
+    // Fraction of news posts (0-1) that actually get the source link appended,
+    // when includeSourceLink is on. A link on EVERY post makes the feed look
+    // automated (a link card under each tweet), so only some posts link out;
+    // the rest read as plain commentary. 0 = never link, 1 = always link.
+    // (env: SOURCE_LINK_RATIO)
+    sourceLinkRatio: 0.2,
+
     // Post styles the model may write in — it picks the one that best fits each
-    // post. (env: POST_STYLES, comma-separated)
-    postStyles: ['educational', 'warning', 'opinion', 'short viral', 'casual'],
+    // post. More styles = more variety, so the feed doesn't fall into one shape.
+    // (env: POST_STYLES, comma-separated)
+    postStyles: [
+        'educational',
+        'warning',
+        'opinion',
+        'hot take',
+        'myth-bust',
+        'question',
+        'short viral',
+        'casual',
+        'analogy',
+        'story',
+    ],
 
     // Calls-to-action / engagement twists the model may weave in when it helps.
     // (env: CALL_TO_ACTIONS, comma-separated)

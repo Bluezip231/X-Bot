@@ -105,6 +105,8 @@ export const config = {
   editorialThreshold: envInt("EDITORIAL_THRESHOLD", runtime.editorialThreshold),
   postDedupLookbackCount: envInt("POST_DEDUP_LOOKBACK_COUNT", runtime.postDedupLookbackCount),
   includeSourceLink: envBool("INCLUDE_SOURCE_LINK", runtime.includeSourceLink),
+  // Fraction of news posts (0-1) that get the source link appended.
+  sourceLinkRatio: Math.min(1, Math.max(0, envFloat("SOURCE_LINK_RATIO", runtime.sourceLinkRatio))),
   cleanupDays: envInt("CLEANUP_DAYS", runtime.cleanupDays),
   // Post styles the model may write in, and CTAs it may weave in.
   postStyles: envList("POST_STYLES", runtime.postStyles),
