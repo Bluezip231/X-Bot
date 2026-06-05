@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "npm install --no-audit --no-fund" } ] }
+    ]
+  }
+}
