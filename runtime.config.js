@@ -71,7 +71,7 @@ export const runtime = {
     // automated (a link card under each tweet), so only some posts link out;
     // the rest read as plain commentary. 0 = never link, 1 = always link.
     // (env: SOURCE_LINK_RATIO)
-    sourceLinkRatio: 0.3,
+    sourceLinkRatio: 0.2,
 
     // Post styles the model may write in — it picks the one that best fits each
     // post. More styles = more variety, so the feed doesn't fall into one shape.
