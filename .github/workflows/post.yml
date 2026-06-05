@@ -1,0 +1,37 @@
+name: Post to X
+
+# Scans for fresh news and posts up to one tweet per run. The daily cap
+# (maxTweetsPerDay) and minimum spacing between posts are enforced via Supabase,
+# so these isolated runs behave just like the old always-on scheduler.
+on:
+  schedule:
+    - cron: "0 */3 * * *" # every 3 hours (UTC)
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# If a scheduled run overruns, don't let the next one pile on top of it.
+concurrency:
+  group: post-to-x
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: node src/index.js --post
+        env:
+          TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
+          TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          THENEWSAPI_KEY: ${{ secrets.THENEWSAPI_KEY }}
+          # Optional: set a repo variable DRY_RUN=true to test without posting.
+          DRY_RUN: ${{ vars.DRY_RUN }}
