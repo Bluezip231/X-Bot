@@ -34,6 +34,10 @@ Coding AI is moving from "which model is smartest?" to "which model keeps me in 
 
 Speed, accuracy, and fewer interruptions matter more than benchmark bragging.
 ------------------------------------------------------
+This is actually a smart update. Once you start using AI agents for coding, keeping track of every session matters a lot.
+
+Agent view makes the tool feel more like a real workspace instead of just a terminal tool.
+------------------------------------------------------
 AI doesn't make you smarter. It raises your ceiling and lowers your floor.
 
 A sharp person with AI is unstoppable.
