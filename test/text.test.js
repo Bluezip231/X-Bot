@@ -1,6 +1,67 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { truncateAtWord } from "../src/utils/text.js";
+import { truncateAtWord, stripAiTells } from "../src/utils/text.js";
+
+test("stripAiTells: spaced em dash becomes a comma", () => {
+  assert.equal(
+    stripAiTells("Stay alert — not every visit is legitimate."),
+    "Stay alert, not every visit is legitimate."
+  );
+});
+
+test("stripAiTells: tight em dash becomes a comma", () => {
+  assert.equal(
+    stripAiTells("government practices—protecting info matters"),
+    "government practices, protecting info matters"
+  );
+});
+
+test("stripAiTells: en dash and double-hyphen are handled too", () => {
+  assert.equal(stripAiTells("a – b"), "a, b");
+  assert.equal(stripAiTells("a -- b"), "a, b");
+});
+
+test("stripAiTells: smart quotes and apostrophes become straight", () => {
+  assert.equal(stripAiTells("It’s a “stark” reminder"), `It's a "stark" reminder`);
+});
+
+test("stripAiTells: preserves numeric/date/version ranges as hyphens", () => {
+  assert.equal(stripAiTells("It takes 3–5 days to patch"), "It takes 3-5 days to patch");
+  assert.equal(stripAiTells("the 2024–2025 breach wave"), "the 2024-2025 breach wave");
+  assert.equal(stripAiTells("affects versions 1.2–1.5"), "affects versions 1.2-1.5");
+  // em dash between digits collapses the same way
+  assert.equal(stripAiTells("a 10—20% jump"), "a 10-20% jump");
+});
+
+test("stripAiTells: preserves technical double-hyphen tokens", () => {
+  // CLI flags and CSS custom properties must survive untouched.
+  assert.equal(
+    stripAiTells("Run npm install --ignore-scripts to be safe"),
+    "Run npm install --ignore-scripts to be safe"
+  );
+  assert.equal(stripAiTells("Set --brand-color in your CSS"), "Set --brand-color in your CSS");
+});
+
+test("stripAiTells: still converts a prose double-hyphen but keeps a nearby flag", () => {
+  assert.equal(
+    stripAiTells("Use the --force flag -- it overrides the checks"),
+    "Use the --force flag, it overrides the checks"
+  );
+});
+
+test("stripAiTells: leaves hyphens in compound words alone", () => {
+  assert.equal(stripAiTells("end-to-end encryption, one-letter typo"), "end-to-end encryption, one-letter typo");
+});
+
+test("stripAiTells: no dash before terminal punctuation artifact", () => {
+  // a dash right before a period shouldn't leave a dangling comma
+  assert.equal(stripAiTells("the point lands —."), "the point lands.");
+});
+
+test("stripAiTells: contains no em/en dashes after cleaning", () => {
+  const out = stripAiTells("one — two – three -- four");
+  assert.ok(!/[—–]/.test(out));
+});
 
 test("returns text unchanged when within the limit", () => {
   assert.equal(truncateAtWord("short and sweet", 280), "short and sweet");
