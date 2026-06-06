@@ -1,6 +1,43 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { truncateAtWord } from "../src/utils/text.js";
+import { truncateAtWord, stripAiTells } from "../src/utils/text.js";
+
+test("stripAiTells: spaced em dash becomes a comma", () => {
+  assert.equal(
+    stripAiTells("Stay alert — not every visit is legitimate."),
+    "Stay alert, not every visit is legitimate."
+  );
+});
+
+test("stripAiTells: tight em dash becomes a comma", () => {
+  assert.equal(
+    stripAiTells("government practices—protecting info matters"),
+    "government practices, protecting info matters"
+  );
+});
+
+test("stripAiTells: en dash and double-hyphen are handled too", () => {
+  assert.equal(stripAiTells("a – b"), "a, b");
+  assert.equal(stripAiTells("a -- b"), "a, b");
+});
+
+test("stripAiTells: smart quotes and apostrophes become straight", () => {
+  assert.equal(stripAiTells("It’s a “stark” reminder"), `It's a "stark" reminder`);
+});
+
+test("stripAiTells: leaves hyphens in compound words alone", () => {
+  assert.equal(stripAiTells("end-to-end encryption, one-letter typo"), "end-to-end encryption, one-letter typo");
+});
+
+test("stripAiTells: no dash before terminal punctuation artifact", () => {
+  // a dash right before a period shouldn't leave a dangling comma
+  assert.equal(stripAiTells("the point lands —."), "the point lands.");
+});
+
+test("stripAiTells: contains no em/en dashes after cleaning", () => {
+  const out = stripAiTells("one — two – three -- four");
+  assert.ok(!/[—–]/.test(out));
+});
 
 test("returns text unchanged when within the limit", () => {
   assert.equal(truncateAtWord("short and sweet", 280), "short and sweet");

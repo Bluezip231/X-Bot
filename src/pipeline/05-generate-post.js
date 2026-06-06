@@ -1,7 +1,7 @@
 import { runPrompt } from "../services/openai-client.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
-import { truncateAtWord } from "../utils/text.js";
+import { truncateAtWord, stripAiTells } from "../utils/text.js";
 
 const MAX_RETRIES = 2;
 const TWEET_LIMIT = 280;
@@ -45,7 +45,9 @@ async function generate({ promptFile, baseInput, limit, buildPost, label }) {
       continue;
     }
 
-    const body = post.text.trim();
+    // Deterministically scrub AI tells (em dashes, smart quotes) before we
+    // measure length or accept the post — instructions alone aren't reliable.
+    const body = stripAiTells(post.text.trim());
     lastBody = body;
     lastModel = post;
 

@@ -1,6 +1,32 @@
 // Pure text helpers (no config import) so they're easy to unit-test.
 
 /**
+ * Strip the most mechanical AI-writing tells from a tweet body so a generated
+ * post reads like a person typed it:
+ *  - em/en dashes (— –) and "--", which almost nobody types by hand, become a
+ *    comma (or fold into the surrounding punctuation)
+ *  - curly/"smart" quotes and apostrophes become straight ASCII ones
+ * Hyphens inside compound words (end-to-end, one-letter) are left alone.
+ */
+export function stripAiTells(text) {
+  return (
+    text
+      // smart double quotes -> straight
+      .replace(/[“”]/g, '"')
+      // smart single quotes / apostrophes -> straight
+      .replace(/[‘’]/g, "'")
+      // em/en dash or "--" (with any surrounding spaces) -> comma + space
+      .replace(/\s*(?:[—–]|--+)\s*/g, ", ")
+      // tidy up artifacts the replacement can create
+      .replace(/ {2,}/g, " ")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/,\s*,/g, ",")
+      .replace(/,(\s*[.!?])/g, "$1")
+      .trim()
+  );
+}
+
+/**
  * Trim an over-long body to `max` characters at a word boundary so a slightly
  * long post still ships (with an ellipsis) instead of being dropped entirely.
  * If the last space is too early (< 60% of max), hard-cuts rather than leaving
