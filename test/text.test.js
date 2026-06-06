@@ -25,6 +25,14 @@ test("stripAiTells: smart quotes and apostrophes become straight", () => {
   assert.equal(stripAiTells("It’s a “stark” reminder"), `It's a "stark" reminder`);
 });
 
+test("stripAiTells: preserves numeric/date/version ranges as hyphens", () => {
+  assert.equal(stripAiTells("It takes 3–5 days to patch"), "It takes 3-5 days to patch");
+  assert.equal(stripAiTells("the 2024–2025 breach wave"), "the 2024-2025 breach wave");
+  assert.equal(stripAiTells("affects versions 1.2–1.5"), "affects versions 1.2-1.5");
+  // em dash between digits collapses the same way
+  assert.equal(stripAiTells("a 10—20% jump"), "a 10-20% jump");
+});
+
 test("stripAiTells: preserves technical double-hyphen tokens", () => {
   // CLI flags and CSS custom properties must survive untouched.
   assert.equal(

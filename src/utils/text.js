@@ -3,7 +3,9 @@
 /**
  * Strip the most mechanical AI-writing tells from a tweet body so a generated
  * post reads like a person typed it:
- *  - em/en dashes (— –), which almost nobody types by hand, become a comma
+ *  - em/en dashes (— –), which almost nobody types by hand, become a comma in
+ *    prose, or a plain hyphen inside a numeric/date/version range (3–5 -> 3-5)
+ *    so range facts copied from a headline keep their meaning
  *  - "--" used as prose punctuation (space-bounded) becomes a comma
  *  - curly/"smart" quotes and apostrophes become straight ASCII ones
  * Hyphens inside compound words (end-to-end) are left alone, and so are
@@ -17,7 +19,9 @@ export function stripAiTells(text) {
       .replace(/[“”]/g, '"')
       // smart single quotes / apostrophes -> straight
       .replace(/[‘’]/g, "'")
-      // em/en dash (any surrounding spaces) -> comma + space
+      // dash between digits is a range (3–5 days, 2024–2025) -> plain hyphen
+      .replace(/(?<=\d)\s*[—–]\s*(?=\d)/g, "-")
+      // any other em/en dash (any surrounding spaces) -> comma + space
       .replace(/\s*[—–]\s*/g, ", ")
       // "--" only when used as a dash, i.e. bounded by spaces on both sides.
       // This deliberately spares "--flag" / "--prop" technical tokens.
