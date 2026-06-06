@@ -22,6 +22,10 @@ import { serializeError } from "../utils/serialize-error.js";
 // runNews() returns this when there's nothing fresh to post (so the caller can
 // fall back to an evergreen post).
 const NO_NEWS = Symbol("no_news");
+// runNews() returns this when the database is unwritable, so the caller stops
+// the whole run (fail closed) instead of attempting an evergreen fallback that
+// would hit the same wall.
+const DB_FAILED = Symbol("db_failed");
 
 /**
  * Run one scan. Posts up to `tweetsPerRun` NEWS tweets (distinct top stories),
@@ -67,6 +71,19 @@ export async function runPipeline(runType = "scheduled") {
   // finish the pipeline run (a run may publish several). Returns { posted, ... }.
   const publishOne = async (post) => {
     const dbResult = await insertPost({ ...post, dry_run: config.dryRun });
+
+    // Fail closed: if we couldn't record the post, do NOT tweet. The daily cap,
+    // spacing, and dedup are all enforced by reading prior posts from the DB, so
+    // tweeting without a record would silently defeat them and let the bot run
+    // away (post every run, repeat stories). Better to skip than to spam.
+    if (!dbResult.id && !config.dryRun) {
+      logger.error(
+        { kind: post.kind, style: post.style },
+        "Skipping post: could not record it in the database (post not tweeted)"
+      );
+      return { posted: false, postId: null, dbFailed: true };
+    }
+
     const tweetId = await postTweet(post.full_text);
     if (tweetId) {
       await markPostPublished(dbResult.id, tweetId);
@@ -103,6 +120,7 @@ export async function runPipeline(runType = "scheduled") {
     const target = Math.min(config.tweetsPerRun, capacity);
     const published = [];
     const skipped = [];
+    let dbFailed = false;
 
     for (const headline of filtered) {
       if (published.length >= target) break;
@@ -132,6 +150,12 @@ export async function runPipeline(runType = "scheduled") {
       if (res.posted) {
         published.push({ tweet_id: res.tweetId, topic: qc.post.topic, style: qc.post.style, title: headline.title });
         if (!stats.postId) stats.postId = res.postId;
+      } else if (res.dbFailed) {
+        // Database is unwritable — every post this run would hit the same wall
+        // (and tweeting blind would defeat the daily cap), so stop here.
+        skipped.push({ title: headline.title, reason: "db_insert_failed" });
+        dbFailed = true;
+        break;
       } else {
         skipped.push({ title: headline.title, reason: "twitter_post_failed" });
       }
@@ -142,6 +166,10 @@ export async function runPipeline(runType = "scheduled") {
     stats.details.published_count = published.length;
     stats.details.published = published;
     if (skipped.length) stats.details.skipped = skipped;
+
+    // DB is unwritable and nothing landed → stop the whole run; do NOT fall
+    // back to evergreen (it would just hit the same failed insert).
+    if (dbFailed && published.length === 0) return DB_FAILED;
 
     if (published.length === 0) return NO_NEWS; // nothing landed → let caller try evergreen
 
@@ -205,7 +233,7 @@ export async function runPipeline(runType = "scheduled") {
     if (res.tweetId) stats.details.tweet_id = res.tweetId;
     if (!res.posted && !config.dryRun) {
       stats.rejectionStage = "publish";
-      stats.rejectionReason = "twitter_post_failed";
+      stats.rejectionReason = res.dbFailed ? "db_insert_failed" : "twitter_post_failed";
     }
     if (!stats.rejectionStage) stats.rejectionStage = "completed";
     await finishPipelineRun(runId, stats);
@@ -258,6 +286,12 @@ export async function runPipeline(runType = "scheduled") {
     const topStyles = await getTopStyles();
 
     const newsResult = await runNews(capacity, topStyles);
+    // Database unwritable: stop the whole run. Don't try evergreen — it would
+    // just hit the same failed insert.
+    if (newsResult === DB_FAILED) {
+      logger.error("Database insert failed — stopping run without evergreen fallback");
+      return reject("publish", "db_insert_failed", { mode: "news" });
+    }
     if (newsResult !== NO_NEWS) return newsResult;
 
     // No fresh news. Fall back to a standalone evergreen tip — but only up to
