@@ -3,10 +3,12 @@
 /**
  * Strip the most mechanical AI-writing tells from a tweet body so a generated
  * post reads like a person typed it:
- *  - em/en dashes (— –) and "--", which almost nobody types by hand, become a
- *    comma (or fold into the surrounding punctuation)
+ *  - em/en dashes (— –), which almost nobody types by hand, become a comma
+ *  - "--" used as prose punctuation (space-bounded) becomes a comma
  *  - curly/"smart" quotes and apostrophes become straight ASCII ones
- * Hyphens inside compound words (end-to-end, one-letter) are left alone.
+ * Hyphens inside compound words (end-to-end) are left alone, and so are
+ * technical double-hyphen tokens like CLI flags (--ignore-scripts) and CSS
+ * custom properties (--brand-color), which are NOT prose punctuation.
  */
 export function stripAiTells(text) {
   return (
@@ -15,8 +17,11 @@ export function stripAiTells(text) {
       .replace(/[“”]/g, '"')
       // smart single quotes / apostrophes -> straight
       .replace(/[‘’]/g, "'")
-      // em/en dash or "--" (with any surrounding spaces) -> comma + space
-      .replace(/\s*(?:[—–]|--+)\s*/g, ", ")
+      // em/en dash (any surrounding spaces) -> comma + space
+      .replace(/\s*[—–]\s*/g, ", ")
+      // "--" only when used as a dash, i.e. bounded by spaces on both sides.
+      // This deliberately spares "--flag" / "--prop" technical tokens.
+      .replace(/ +--+ +/g, ", ")
       // tidy up artifacts the replacement can create
       .replace(/ {2,}/g, " ")
       .replace(/\s+([,.;:!?])/g, "$1")

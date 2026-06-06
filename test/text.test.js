@@ -25,6 +25,22 @@ test("stripAiTells: smart quotes and apostrophes become straight", () => {
   assert.equal(stripAiTells("It’s a “stark” reminder"), `It's a "stark" reminder`);
 });
 
+test("stripAiTells: preserves technical double-hyphen tokens", () => {
+  // CLI flags and CSS custom properties must survive untouched.
+  assert.equal(
+    stripAiTells("Run npm install --ignore-scripts to be safe"),
+    "Run npm install --ignore-scripts to be safe"
+  );
+  assert.equal(stripAiTells("Set --brand-color in your CSS"), "Set --brand-color in your CSS");
+});
+
+test("stripAiTells: still converts a prose double-hyphen but keeps a nearby flag", () => {
+  assert.equal(
+    stripAiTells("Use the --force flag -- it overrides the checks"),
+    "Use the --force flag, it overrides the checks"
+  );
+});
+
 test("stripAiTells: leaves hyphens in compound words alone", () => {
   assert.equal(stripAiTells("end-to-end encryption, one-letter typo"), "end-to-end encryption, one-letter typo");
 });
