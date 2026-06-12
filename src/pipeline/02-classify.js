@@ -17,7 +17,8 @@ async function classifyBatch(headlines, startIndex) {
   const headlineList = headlines.map((h, i) => `${startIndex + i}. ${h.title}`).join("\n");
   const userMessage = `${topicsLine()}\n\nHeadlines (use the exact index shown):\n${headlineList}`;
 
-  const result = await runPrompt("classify.txt", userMessage);
+  // Low temperature: classification is a judgment task — consistency over flair.
+  const result = await runPrompt("classify.txt", userMessage, { temperature: 0.2 });
   return result.classifications || [];
 }
 

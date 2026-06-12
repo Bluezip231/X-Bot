@@ -3,7 +3,8 @@
 An always-on Node.js bot that posts original news tweets on configurable topics
 (default: **AI, cybersecurity, scams, online safety, tech, web design**). Each run:
 
-1. **Ingests** headlines from RSS feeds (+ optional TheNewsAPI) and dedups them.
+1. **Ingests** headlines from RSS feeds (+ optional TheNewsAPI), drops stale
+   items (older than `maxHeadlineAgeHours`), and dedups them.
 2. **Classifies** each headline into your configured topic buckets (ChatGPT).
 3. **Editorial filter** — scores on-topic relevance and keeps only the best (ChatGPT).
 4. **Dedup check** — compares the top candidate against recent posts so it never
@@ -12,9 +13,22 @@ An always-on Node.js bot that posts original news tweets on configurable topics
    warning, opinion, short-viral, or casual) with an optional call-to-action
    ("watch for this", "save this", "what do you think?"), optionally appending
    the source link.
-6. **Quality check** — programmatic guardrails (length, hashtags) + an LLM check
-   for faithfulness/tone/safety.
+6. **Quality check** — programmatic guardrails (length, hashtags, and a
+   banned-phrase list that auto-rejects canned bot phrasing like "underscores"
+   or "stay vigilant") + an LLM check for faithfulness/tone/safety/human voice.
+   If a draft is rejected, the writer gets one revision pass with the
+   reviewer's feedback before the story is dropped.
 7. **Posts** an original tweet to X and logs everything to **Supabase**.
+
+The posts are written in the **first person**, as a real person reacting to the
+news, and roughly a third of them end with a specific question to readers so
+the feed invites replies instead of broadcasting.
+
+**Promo** posts (kind `promo`) run on top of the news flow: every so often
+(default ~2x/week, self-spaced) the bot posts a value-first scam post that
+mentions your product (**ScamKit**) and appends its link, grounded to the
+description in `runtime.config.js` so it never invents features. See the
+`promo*` settings.
 
 **Evergreen** content (a standalone cybersecurity tip, scam warning, AI
 explainer, or online-safety reminder, no headline needed) is used as a
@@ -52,6 +66,7 @@ Key `runtime.config.js` settings:
 | ------------------------ | ------------------ | -------------------------------------------------- |
 | `topics`                 | AI, cybersecurity… | Topics the bot targets (drives classify + filter). |
 | `newsFeeds`              | 11 tech/sec feeds  | RSS/Atom sources to pull headlines from.           |
+| `maxHeadlineAgeHours`    | `48`               | Skip headlines older than this at ingest, so resurfaced old items can't post as fresh news (`0` disables). |
 | `maxTweetsPerDay`        | `3`                | Hard cap on tweets per day; then it stops. Day boundary is local midnight in `cronTimezone`. |
 | `tweetsPerRun`           | `1`                | Tweets to post per scan (≤ daily cap).             |
 | `minPostSpacingMinutes`  | `360`              | Min minutes between posts, so the day's tweets spread out instead of clustering (`0` disables). |
@@ -59,6 +74,10 @@ Key `runtime.config.js` settings:
 | `postDedupLookbackCount` | `5`                | Recent posts the dedup step compares against.      |
 | `includeSourceLink`      | `true`             | Append the source article link to each post.       |
 | `evergreenRatio`         | `0`                | Share of runs (0-1) that post evergreen vs news (0 = fallback only). |
+| `promoEnabled`           | `true`             | Post about your own product every so often (kind `promo`). |
+| `promoName` / `promoUrl` | ScamKit            | Product name and the exact public URL appended to promo posts. |
+| `promoDescription`       | scam-checking tool | What the product is — promo posts are grounded to this, never inventing features. |
+| `promoMaxPerWeek`        | `2`                | Target promos per week (self-spaced: one every 7/N days). `0` disables. |
 | `maxEvergreenPerDay`     | `1`                | Cap on evergreen fallback tips per day (UTC).      |
 | `postStyles`             | 5 styles           | Styles the model may write in (it picks best fit).  |
 | `callToActions`          | 4 CTAs             | Engagement phrases the model may rarely weave in.   |

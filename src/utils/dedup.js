@@ -26,19 +26,14 @@ function normalize(text) {
 }
 
 /**
- * Check if a headline is a duplicate of something we've already ingested.
- * Returns true if it should be skipped.
- * Uses lazy import of db.js to avoid eager config validation in tests.
+ * Check if a headline duplicates something already seen, against pre-fetched
+ * data: an exact URL match (`knownUrls` is a Set) or a title similar to any of
+ * `recentTitles`. Pure (no DB access) — the caller fetches the recent sets
+ * once per run instead of two queries per headline.
  */
-export async function isDuplicate(headline, { similarityThreshold = 0.6, hoursBack = 48 } = {}) {
-  const { getRecentHeadlineUrls, getRecentHeadlineTitles } = await import("../db.js");
-
-  // URL exact match
-  const knownUrls = await getRecentHeadlineUrls(hoursBack);
+export function isDuplicateAgainst(headline, { knownUrls, recentTitles, similarityThreshold = 0.6 }) {
   if (headline.url && knownUrls.has(headline.url)) return true;
 
-  // Title similarity check
-  const recentTitles = await getRecentHeadlineTitles(hoursBack);
   for (const existing of recentTitles) {
     if (titleSimilarity(headline.title, existing) >= similarityThreshold) {
       return true;

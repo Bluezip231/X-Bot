@@ -34,10 +34,17 @@ async function generate({ promptFile, baseInput, limit, buildPost, label }) {
     attemptsUsed = attempt + 1;
     const userInput = { ...input };
     if (attempt > 0 && lastBody) {
-      userInput.retry_feedback = `Your last attempt was ${lastBody.length} characters. Rewrite it to be at most ${target} characters while keeping the key point.`;
+      const lengthNote = `Your last attempt was ${lastBody.length} characters. Rewrite it to be at most ${target} characters while keeping the key point.`;
+      // Keep any reviewer feedback from baseInput so a length retry doesn't
+      // undo the quality fix it was asked for.
+      userInput.retry_feedback = input.retry_feedback
+        ? `${input.retry_feedback} Also: ${lengthNote}`
+        : lengthNote;
     }
 
-    const result = await runPrompt(promptFile, JSON.stringify(userInput));
+    // Slightly higher temperature than the judgment steps — the prompts push
+    // hard for varied openings and structure, which needs some sampling room.
+    const result = await runPrompt(promptFile, JSON.stringify(userInput), { temperature: 0.8 });
     const post = result.post;
 
     if (!post || typeof post.text !== "string" || post.text.trim().length === 0) {
@@ -82,9 +89,11 @@ async function generate({ promptFile, baseInput, limit, buildPost, label }) {
 
 /**
  * News post: written about a specific headline. Appends the source link when
- * configured (and budgets the body for it).
+ * configured (and budgets the body for it). `revisionFeedback` (optional) is
+ * reviewer feedback from a failed quality check — passed to the model as
+ * retry_feedback so the rewrite fixes what the reviewer flagged.
  */
-export async function generatePost({ headline, topStyles = [] }) {
+export async function generatePost({ headline, topStyles = [], revisionFeedback = null }) {
   // Only link out on a fraction of posts — a link card under every tweet is a
   // dead giveaway that an account is automated.
   const hasLink =
@@ -110,6 +119,7 @@ export async function generatePost({ headline, topStyles = [] }) {
       // Soft engagement signal: styles that have historically performed best.
       // Omitted entirely when there isn't enough data yet.
       ...(topStyles.length ? { top_performing_styles: topStyles } : {}),
+      ...(revisionFeedback ? { retry_feedback: revisionFeedback } : {}),
     },
     limit,
     buildPost,
@@ -118,10 +128,43 @@ export async function generatePost({ headline, topStyles = [] }) {
 }
 
 /**
+ * Promo post: a value-first post about the owner's own product, with the
+ * product link always appended (driving traffic is the point). Grounded to
+ * config.promo.description so it never invents features. `previousPromos`
+ * (recent promo texts) is passed so the writer varies its angle.
+ */
+export async function generatePromoPost({ previousPromos = [], revisionFeedback = null }) {
+  const limit = TWEET_LIMIT - LINK_RESERVE;
+
+  const buildPost = (body, model) => ({
+    full_text: `${body}\n${config.promo.url}`,
+    topic: model.topic || "scams",
+    style: model.style || null,
+    kind: "promo",
+    source_title: null,
+    source_url: config.promo.url,
+    passed_guardrails: false,
+  });
+
+  return generate({
+    promptFile: "generate-promo.txt",
+    baseInput: {
+      product_name: config.promo.name,
+      product_description: config.promo.description,
+      previous_promo_posts: previousPromos.map((p) => p.full_text),
+      ...(revisionFeedback ? { retry_feedback: revisionFeedback } : {}),
+    },
+    limit,
+    buildPost,
+    label: "promo",
+  });
+}
+
+/**
  * Evergreen post: a standalone tip / warning / explainer / safety note on a
  * configured topic. No headline, no source link.
  */
-export async function generateEvergreenPost({ topic }) {
+export async function generateEvergreenPost({ topic, revisionFeedback = null }) {
   const limit = TWEET_LIMIT;
 
   const buildPost = (body, model) => ({
@@ -136,7 +179,11 @@ export async function generateEvergreenPost({ topic }) {
 
   return generate({
     promptFile: "generate-evergreen.txt",
-    baseInput: { topic, all_topics: config.topics },
+    baseInput: {
+      topic,
+      all_topics: config.topics,
+      ...(revisionFeedback ? { retry_feedback: revisionFeedback } : {}),
+    },
     limit,
     buildPost,
     label: "evergreen",

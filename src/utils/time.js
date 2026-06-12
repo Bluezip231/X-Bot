@@ -29,6 +29,18 @@ function tzOffsetMs(date, timeZone) {
 }
 
 /**
+ * True when `dateInput` parses to an instant more than `hours` ago. Missing or
+ * unparseable dates return false (fail open) so a feed with broken timestamps
+ * still flows — the dedup and editorial filters still gate those items.
+ */
+export function isOlderThanHours(dateInput, hours, now = new Date()) {
+  if (!dateInput) return false;
+  const t = new Date(dateInput).getTime();
+  if (!Number.isFinite(t)) return false;
+  return now.getTime() - t > hours * 60 * 60 * 1000;
+}
+
+/**
  * The UTC instant corresponding to the most recent local midnight in
  * `timeZone`. Used as the day boundary for the daily post counter so "today"
  * tracks the audience's clock rather than UTC. Falls back to UTC midnight if

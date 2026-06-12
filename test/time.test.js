@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { startOfDayInTimeZone } from "../src/utils/time.js";
+import { startOfDayInTimeZone, isOlderThanHours } from "../src/utils/time.js";
 
 test("UTC: floors to UTC midnight", () => {
   const now = new Date("2026-06-04T01:30:00Z");
@@ -35,4 +35,26 @@ test("invalid timezone falls back to UTC midnight", () => {
   const now = new Date("2026-06-04T08:15:00Z");
   const start = startOfDayInTimeZone("Not/AZone", now);
   assert.equal(start.toISOString(), "2026-06-04T00:00:00.000Z");
+});
+
+test("isOlderThanHours: date past the cutoff is stale", () => {
+  const now = new Date("2026-06-04T12:00:00Z");
+  assert.equal(isOlderThanHours("2026-06-02T11:00:00Z", 48, now), true);
+});
+
+test("isOlderThanHours: date within the cutoff is fresh", () => {
+  const now = new Date("2026-06-04T12:00:00Z");
+  assert.equal(isOlderThanHours("2026-06-03T12:00:00Z", 48, now), false);
+});
+
+test("isOlderThanHours: exactly at the cutoff is not stale", () => {
+  const now = new Date("2026-06-04T12:00:00Z");
+  assert.equal(isOlderThanHours("2026-06-02T12:00:00Z", 48, now), false);
+});
+
+test("isOlderThanHours: missing or unparseable dates fail open (not stale)", () => {
+  const now = new Date("2026-06-04T12:00:00Z");
+  assert.equal(isOlderThanHours(null, 48, now), false);
+  assert.equal(isOlderThanHours("", 48, now), false);
+  assert.equal(isOlderThanHours("not a date", 48, now), false);
 });
