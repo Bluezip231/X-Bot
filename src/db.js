@@ -119,15 +119,20 @@ export async function getPostCountToday({ kind } = {}) {
 
 /**
  * Fetch the last N published posts, newest first. Used by the dedup check to
- * compare a candidate headline against recent posts.
+ * compare a candidate headline against recent posts, and (with { kind }) by
+ * the promo generator to vary its angle from previous promos.
  */
-export async function getLastPublishedPosts(limit = 5) {
-  const { data, error } = await supabase
+export async function getLastPublishedPosts(limit = 5, { kind } = {}) {
+  let query = supabase
     .from("posts")
     .select("full_text, created_at")
     .eq("published", true)
     .order("created_at", { ascending: false })
     .limit(limit);
+
+  if (kind) query = query.eq("kind", kind);
+
+  const { data, error } = await query;
 
   if (error) {
     logger.warn({ error: error.message }, "getLastPublishedPosts failed");
@@ -139,10 +144,11 @@ export async function getLastPublishedPosts(limit = 5) {
 /**
  * When the most recent real (non-dry-run) post was published, as a Date, or
  * null if there are none. Used to enforce minimum spacing between posts so the
- * day's tweets are spread out rather than clustered.
+ * day's tweets are spread out rather than clustered. Pass { kind } to look at
+ * one kind only (e.g. "promo" — used to self-space promo posts).
  */
-export async function getLastPublishedAt() {
-  const { data, error } = await supabase
+export async function getLastPublishedAt({ kind } = {}) {
+  let query = supabase
     .from("posts")
     .select("created_at")
     .eq("published", true)
@@ -150,8 +156,33 @@ export async function getLastPublishedAt() {
     .order("created_at", { ascending: false })
     .limit(1);
 
+  if (kind) query = query.eq("kind", kind);
+
+  const { data, error } = await query;
+
   if (error) {
     logger.warn({ error: error.message }, "getLastPublishedAt failed");
+    return null;
+  }
+  return data && data[0] ? new Date(data[0].created_at) : null;
+}
+
+/**
+ * When the most recent post of `kind` was created, counting unpublished and
+ * dry-run rows too. Used in dry-run mode to space promo posts, where nothing
+ * is ever marked published (otherwise every test scan would pick the promo
+ * path and the news flow could never be previewed).
+ */
+export async function getLastPostAttemptAt(kind) {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("created_at")
+    .eq("kind", kind)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    logger.warn({ error: error.message }, "getLastPostAttemptAt failed");
     return null;
   }
   return data && data[0] ? new Date(data[0].created_at) : null;

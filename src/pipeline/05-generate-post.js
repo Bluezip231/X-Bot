@@ -128,6 +128,39 @@ export async function generatePost({ headline, topStyles = [], revisionFeedback 
 }
 
 /**
+ * Promo post: a value-first post about the owner's own product, with the
+ * product link always appended (driving traffic is the point). Grounded to
+ * config.promo.description so it never invents features. `previousPromos`
+ * (recent promo texts) is passed so the writer varies its angle.
+ */
+export async function generatePromoPost({ previousPromos = [], revisionFeedback = null }) {
+  const limit = TWEET_LIMIT - LINK_RESERVE;
+
+  const buildPost = (body, model) => ({
+    full_text: `${body}\n${config.promo.url}`,
+    topic: model.topic || "scams",
+    style: model.style || null,
+    kind: "promo",
+    source_title: null,
+    source_url: config.promo.url,
+    passed_guardrails: false,
+  });
+
+  return generate({
+    promptFile: "generate-promo.txt",
+    baseInput: {
+      product_name: config.promo.name,
+      product_description: config.promo.description,
+      previous_promo_posts: previousPromos.map((p) => p.full_text),
+      ...(revisionFeedback ? { retry_feedback: revisionFeedback } : {}),
+    },
+    limit,
+    buildPost,
+    label: "promo",
+  });
+}
+
+/**
  * Evergreen post: a standalone tip / warning / explainer / safety note on a
  * configured topic. No headline, no source link.
  */

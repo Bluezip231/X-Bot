@@ -112,6 +112,26 @@ export const runtime = {
     // (env: MAX_EVERGREEN_PER_DAY)
     maxEvergreenPerDay: 1,
 
+    // ─── Product promo posts ───
+    // Every so often the bot posts about the owner's own product (kind:
+    // "promo"): a useful scam-related post that mentions the product and links
+    // to it, to drive traffic. Promos count toward maxTweetsPerDay and respect
+    // post spacing. (env: PROMO_ENABLED)
+    promoEnabled: true,
+    // Product name, exactly as it should appear in posts. (env: PROMO_NAME)
+    promoName: 'ScamKit',
+    // Public URL appended to every promo post. Must be exact. (env: PROMO_URL)
+    promoUrl: 'https://scamkit.com/',
+    // What the product is, in plain words. The writer is grounded to this — it
+    // will never claim features that aren't stated here, so keep it accurate
+    // and update it as the product grows. (env: PROMO_DESCRIPTION)
+    promoDescription:
+        'a scam-checking tool: paste a suspicious message, link, or offer and it helps you figure out whether it is a scam',
+    // Target promos per week. The bot self-spaces: a promo is due when none
+    // has been posted for 7/promoMaxPerWeek days (2/week = one every ~3.5
+    // days). 0 disables promos. (env: PROMO_MAX_PER_WEEK)
+    promoMaxPerWeek: 2,
+
     // Engagement feedback: bias new posts toward the styles that have earned the
     // most engagement (likes + replies + retweets). It's a SOFT signal — the
     // generator still picks the style that best fits each story; this only

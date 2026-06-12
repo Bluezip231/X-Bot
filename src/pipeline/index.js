@@ -2,7 +2,7 @@ import { ingest } from "./01-ingest.js";
 import { classify } from "./02-classify.js";
 import { editorialFilter } from "./03-editorial-filter.js";
 import { dedupCheck } from "./04-dedup-check.js";
-import { generatePost, generateEvergreenPost } from "./05-generate-post.js";
+import { generatePost, generateEvergreenPost, generatePromoPost } from "./05-generate-post.js";
 import { qualityCheck } from "./06-quality-check.js";
 import {
   insertPost,
@@ -10,6 +10,7 @@ import {
   getPostCountToday,
   getLastPublishedPosts,
   getLastPublishedAt,
+  getLastPostAttemptAt,
   insertPipelineRun,
   finishPipelineRun,
 } from "../db.js";
@@ -30,16 +31,20 @@ const DB_FAILED = Symbol("db_failed");
 // of attempting an evergreen fallback against the same failing API.
 const TWITTER_FAILED = Symbol("twitter_failed");
 
-// Turn a failed LLM quality review into retry feedback for the writer, so the
-// story gets one revision pass instead of being dropped outright.
+// Quality-check failures that are worth one revision pass: the reviewer (or
+// the programmatic guardrails, e.g. canned bot phrasing) said WHY the draft
+// failed, so the writer can fix it instead of the story being dropped.
+const REVISABLE_FAILURES = new Set(["quality_check_failed", "programmatic_guardrails_failed"]);
+
+// Turn a failed quality check into retry feedback for the writer.
 function buildRevisionFeedback(post, details = {}) {
-  const issues = (details.issues || []).join("; ");
+  const problems = [...(details.violations || []), ...(details.issues || [])].join("; ");
   const suggestion = details.suggestion || "";
   return [
     `A pre-publish reviewer rejected your previous draft: "${post.full_text}".`,
-    issues ? `Issues: ${issues}.` : "",
+    problems ? `Problems: ${problems}.` : "",
     suggestion ? `Suggestion: ${suggestion}.` : "",
-    "Write a fresh draft that fixes these issues.",
+    "Write a fresh draft that fixes these problems.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -169,9 +174,9 @@ export async function runPipeline(runType = "scheduled") {
       }
 
       let qc = await qualityCheck(gen.post);
-      // One revision pass: when the LLM reviewer rejects the draft, hand its
+      // One revision pass: when the reviewer rejects the draft, hand its
       // feedback back to the writer instead of dropping the story outright.
-      if (!qc.post && qc.failure?.reason === "quality_check_failed") {
+      if (!qc.post && REVISABLE_FAILURES.has(qc.failure?.reason)) {
         logger.info({ title: headline.title }, "Quality check failed — regenerating once with reviewer feedback");
         const revisionFeedback = buildRevisionFeedback(gen.post, qc.failure.details);
         const regen = await generatePost({ headline, topStyles, revisionFeedback });
@@ -239,7 +244,7 @@ export async function runPipeline(runType = "scheduled") {
 
     let qc = await qualityCheck(gen.post);
     // One revision pass with the reviewer's feedback before giving up.
-    if (!qc.post && qc.failure?.reason === "quality_check_failed") {
+    if (!qc.post && REVISABLE_FAILURES.has(qc.failure?.reason)) {
       logger.info({ topic }, "Quality check failed — regenerating once with reviewer feedback");
       const revisionFeedback = buildRevisionFeedback(gen.post, qc.failure.details);
       const regen = await generateEvergreenPost({ topic, revisionFeedback });
@@ -295,6 +300,56 @@ export async function runPipeline(runType = "scheduled") {
     return checked;
   };
 
+  // PROMO path: one value-first post about the owner's product, link appended.
+  const runPromo = async () => {
+    stats.details.mode = "promo";
+
+    // Recent promos are handed to the writer so each one takes a new angle.
+    const previousPromos = await getLastPublishedPosts(3, { kind: "promo" });
+
+    let gen = await generatePromoPost({ previousPromos });
+    if (!gen.post) {
+      return reject("generate_post", gen.failure?.reason || "generate_post_failed", {
+        generate_failure: gen.failure?.details || null,
+      });
+    }
+
+    let qc = await qualityCheck(gen.post);
+    // One revision pass with the reviewer's feedback before giving up.
+    if (!qc.post && REVISABLE_FAILURES.has(qc.failure?.reason)) {
+      logger.info("Quality check failed — regenerating promo once with reviewer feedback");
+      const revisionFeedback = buildRevisionFeedback(gen.post, qc.failure.details);
+      const regen = await generatePromoPost({ previousPromos, revisionFeedback });
+      if (regen.post) {
+        gen = regen;
+        qc = await qualityCheck(regen.post);
+      }
+    }
+    if (!qc.post) {
+      logger.warn("Promo post failed quality check, not publishing");
+      return reject("quality_check", qc.failure?.reason || "quality_check_failed", {
+        generated_post: { full_text: gen.post.full_text },
+        quality_failure: qc.failure?.details || null,
+      });
+    }
+    if (qc.quality_scores) stats.details.quality_scores = qc.quality_scores;
+
+    const res = await publishOne(qc.post);
+    stats.postGenerated = true;
+    stats.postPublished = !!res.posted;
+    stats.postId = res.postId;
+    stats.details.published_count = res.posted ? 1 : 0;
+    if (res.tweetId) stats.details.tweet_id = res.tweetId;
+    if (!res.posted && !config.dryRun) {
+      stats.rejectionStage = "publish";
+      stats.rejectionReason = res.dbFailed ? "db_insert_failed" : "twitter_post_failed";
+    }
+    if (!stats.rejectionStage) stats.rejectionStage = "completed";
+    await finishPipelineRun(runId, stats);
+    logger.info({ kind: "promo", tweetId: res.tweetId }, "Promo run complete");
+    return qc.post;
+  };
+
   try {
     // --- Cheap gates first: bail out BEFORE any ingest / LLM calls so a scan
     // that can't post costs nothing. ---
@@ -327,6 +382,26 @@ export async function runPipeline(runType = "scheduled") {
             min_post_spacing_minutes: config.minPostSpacingMinutes,
           });
         }
+      }
+    }
+
+    // Product promo, self-spaced to ~promoMaxPerWeek: a promo is due when none
+    // has been published for 168/maxPerWeek hours (2/week = one every ~3.5
+    // days). Promos take the slot for this scan; news resumes next run. The
+    // daily cap and min-spacing gates above already applied.
+    if (config.promo.enabled && config.promo.url && config.promo.maxPerWeek > 0) {
+      const intervalMs = (168 / config.promo.maxPerWeek) * 60 * 60 * 1000;
+      // In dry-run nothing is ever marked published, so space test promos by
+      // attempt instead — otherwise every dry-run scan would pick the promo path.
+      const lastPromoAt = config.dryRun
+        ? await getLastPostAttemptAt("promo")
+        : await getLastPublishedAt({ kind: "promo" });
+      if (!lastPromoAt || Date.now() - lastPromoAt.getTime() >= intervalMs) {
+        logger.info(
+          { lastPromoAt: lastPromoAt?.toISOString() || null, maxPerWeek: config.promo.maxPerWeek },
+          "Promo post due — running promo instead of news this scan"
+        );
+        return await runPromo();
       }
     }
 

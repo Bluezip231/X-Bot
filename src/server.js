@@ -161,7 +161,7 @@ export function renderDashboard(posts) {
   ${leaderboard("This week — by topic", topicWeek, "Topic")}
   ${leaderboard(`Top topics — last ${config.dashboard.weeks} weeks`, topicAll, "Topic")}
   ${leaderboard("By style", styleAll, "Style")}
-  ${leaderboard("News vs evergreen", kindAll, "Kind")}
+  ${leaderboard("By kind (news / evergreen / promo)", kindAll, "Kind")}
 
   <h2>Weekly history</h2>
   ${weekTable}

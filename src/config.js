@@ -119,6 +119,15 @@ export const config = {
   maxEvergreenPerDay: Math.max(0, envInt("MAX_EVERGREEN_PER_DAY", runtime.maxEvergreenPerDay)),
   // How far back the daily engagement refresh updates metrics.
   metricsLookbackDays: envInt("METRICS_LOOKBACK_DAYS", runtime.metricsLookbackDays),
+  // Product promo posts (kind: "promo") — occasional posts about the owner's
+  // own product, linking to it. Disabled when the URL is empty or maxPerWeek=0.
+  promo: {
+    enabled: envBool("PROMO_ENABLED", runtime.promoEnabled),
+    name: envStr("PROMO_NAME", runtime.promoName),
+    url: envStr("PROMO_URL", runtime.promoUrl),
+    description: envStr("PROMO_DESCRIPTION", runtime.promoDescription),
+    maxPerWeek: Math.max(0, envInt("PROMO_MAX_PER_WEEK", runtime.promoMaxPerWeek)),
+  },
   // Engagement feedback: bias new posts toward historically best-performing
   // styles (soft signal; no effect until posts have accumulated metrics).
   styleFeedback: {

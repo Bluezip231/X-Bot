@@ -18,7 +18,7 @@ create table if not exists posts (
   id                bigint generated always as identity primary key,
   full_text         text not null,           -- the post as published (may include a source link)
   topic             text,
-  kind              text default 'news',     -- 'news' | 'evergreen'
+  kind              text default 'news',     -- 'news' | 'evergreen' | 'promo'
   style             text,                    -- educational | warning | opinion | short viral | casual
   source_title      text,
   source_url        text,
