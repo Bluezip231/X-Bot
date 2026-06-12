@@ -27,7 +27,13 @@ export function loadPrompt(name) {
  * Call ChatGPT with a system prompt and user message.
  * Returns the parsed JSON response (jsonMode) or raw text. Retries on failure.
  */
-export async function chatCompletion({ systemPrompt, userMessage, jsonMode = false, maxRetries = 2 }) {
+export async function chatCompletion({
+  systemPrompt,
+  userMessage,
+  jsonMode = false,
+  maxRetries = 2,
+  temperature = 0.7,
+}) {
   const messages = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userMessage },
@@ -38,7 +44,7 @@ export async function chatCompletion({ systemPrompt, userMessage, jsonMode = fal
       const params = {
         model: config.openai.model,
         messages,
-        temperature: 0.7,
+        temperature,
         max_tokens: 4096,
       };
 
@@ -74,12 +80,13 @@ export async function chatCompletion({ systemPrompt, userMessage, jsonMode = fal
 /**
  * Convenience: load the persona system prompt + a task prompt, and call ChatGPT.
  */
-export async function runPrompt(promptFile, userMessage, { jsonMode = true } = {}) {
+export async function runPrompt(promptFile, userMessage, { jsonMode = true, temperature } = {}) {
   const systemPrompt = loadPrompt("system-persona.txt");
   const taskPrompt = loadPrompt(promptFile);
   return chatCompletion({
     systemPrompt: systemPrompt + "\n\n" + taskPrompt,
     userMessage,
     jsonMode,
+    ...(temperature !== undefined ? { temperature } : {}),
   });
 }

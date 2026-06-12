@@ -3,7 +3,8 @@
 An always-on Node.js bot that posts original news tweets on configurable topics
 (default: **AI, cybersecurity, scams, online safety, tech, web design**). Each run:
 
-1. **Ingests** headlines from RSS feeds (+ optional TheNewsAPI) and dedups them.
+1. **Ingests** headlines from RSS feeds (+ optional TheNewsAPI), drops stale
+   items (older than `maxHeadlineAgeHours`), and dedups them.
 2. **Classifies** each headline into your configured topic buckets (ChatGPT).
 3. **Editorial filter** — scores on-topic relevance and keeps only the best (ChatGPT).
 4. **Dedup check** — compares the top candidate against recent posts so it never
@@ -13,7 +14,9 @@ An always-on Node.js bot that posts original news tweets on configurable topics
    ("watch for this", "save this", "what do you think?"), optionally appending
    the source link.
 6. **Quality check** — programmatic guardrails (length, hashtags) + an LLM check
-   for faithfulness/tone/safety.
+   for faithfulness/tone/safety. If the LLM reviewer rejects a draft, the writer
+   gets one revision pass with the reviewer's feedback before the story is
+   dropped.
 7. **Posts** an original tweet to X and logs everything to **Supabase**.
 
 **Evergreen** content (a standalone cybersecurity tip, scam warning, AI
@@ -52,6 +55,7 @@ Key `runtime.config.js` settings:
 | ------------------------ | ------------------ | -------------------------------------------------- |
 | `topics`                 | AI, cybersecurity… | Topics the bot targets (drives classify + filter). |
 | `newsFeeds`              | 11 tech/sec feeds  | RSS/Atom sources to pull headlines from.           |
+| `maxHeadlineAgeHours`    | `48`               | Skip headlines older than this at ingest, so resurfaced old items can't post as fresh news (`0` disables). |
 | `maxTweetsPerDay`        | `3`                | Hard cap on tweets per day; then it stops. Day boundary is local midnight in `cronTimezone`. |
 | `tweetsPerRun`           | `1`                | Tweets to post per scan (≤ daily cap).             |
 | `minPostSpacingMinutes`  | `360`              | Min minutes between posts, so the day's tweets spread out instead of clustering (`0` disables). |

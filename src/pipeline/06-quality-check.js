@@ -23,13 +23,15 @@ export async function qualityCheck(post) {
   // ChatGPT accuracy/tone verification (fails open if the call errors).
   let qualityScores = null;
   try {
+    // Low temperature: verification is a judgment task — consistency over flair.
     const result = await runPrompt(
       "quality-check.txt",
       JSON.stringify({
         full_text: post.full_text,
         source_title: post.source_title || null,
         kind: post.kind || "news",
-      })
+      }),
+      { temperature: 0.2 }
     );
 
     const quality = result.quality;

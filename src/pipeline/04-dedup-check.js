@@ -28,7 +28,8 @@ export async function dedupCheck({ headline, recentTweets }) {
 
   let raw;
   try {
-    raw = await runPrompt("dedup-check.txt", JSON.stringify(input));
+    // Near-zero temperature: a duplicate verdict should be deterministic.
+    raw = await runPrompt("dedup-check.txt", JSON.stringify(input), { temperature: 0.1 });
   } catch (err) {
     logger.warn({ error: err.message }, "Dedup check: LLM call failed, failing open");
     return {

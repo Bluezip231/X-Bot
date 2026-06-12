@@ -35,6 +35,13 @@ export const runtime = {
     // Max headlines pulled from each feed per run. (env: PER_FEED_LIMIT)
     perFeedLimit: 15,
 
+    // Skip headlines older than this many hours at ingest. Feeds sometimes
+    // resurface old items, and the headline dedup table is pruned after
+    // cleanupDays — without this gate an old story could come back and get
+    // posted as fresh news. 0 disables the age check.
+    // (env: MAX_HEADLINE_AGE_HOURS)
+    maxHeadlineAgeHours: 48,
+
     // Hard cap on tweets posted per day (UTC). Once reached, the bot stops
     // posting for the rest of the day. Kept low on purpose — we'd rather post a
     // few strong tweets than many weak ones. (env: MAX_TWEETS_PER_DAY)

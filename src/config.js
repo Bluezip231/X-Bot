@@ -92,6 +92,8 @@ export const config = {
   news: {
     feeds: runtime.newsFeeds,
     perFeedLimit: envInt("PER_FEED_LIMIT", runtime.perFeedLimit),
+    // Skip headlines older than this many hours at ingest (0 disables).
+    maxHeadlineAgeHours: Math.max(0, envInt("MAX_HEADLINE_AGE_HOURS", runtime.maxHeadlineAgeHours)),
     // Optional extra source. Secret (env-only); empty disables it.
     theNewsApiKey: envStr("THENEWSAPI_KEY", ""),
   },

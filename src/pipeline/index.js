@@ -26,6 +26,24 @@ const NO_NEWS = Symbol("no_news");
 // the whole run (fail closed) instead of attempting an evergreen fallback that
 // would hit the same wall.
 const DB_FAILED = Symbol("db_failed");
+// runNews() returns this when posting to X failed, so the caller stops instead
+// of attempting an evergreen fallback against the same failing API.
+const TWITTER_FAILED = Symbol("twitter_failed");
+
+// Turn a failed LLM quality review into retry feedback for the writer, so the
+// story gets one revision pass instead of being dropped outright.
+function buildRevisionFeedback(post, details = {}) {
+  const issues = (details.issues || []).join("; ");
+  const suggestion = details.suggestion || "";
+  return [
+    `A pre-publish reviewer rejected your previous draft: "${post.full_text}".`,
+    issues ? `Issues: ${issues}.` : "",
+    suggestion ? `Suggestion: ${suggestion}.` : "",
+    "Write a fresh draft that fixes these issues.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 /**
  * Run one scan. Posts up to `tweetsPerRun` NEWS tweets (distinct top stories),
@@ -84,7 +102,16 @@ export async function runPipeline(runType = "scheduled") {
       return { posted: false, postId: null, dbFailed: true };
     }
 
-    const tweetId = await postTweet(post.full_text);
+    let tweetId = null;
+    try {
+      tweetId = await postTweet(post.full_text);
+    } catch (err) {
+      // A transient X API failure shouldn't abort the whole run as an
+      // exception. The post row stays unpublished, so it never counts toward
+      // the daily cap; the caller records the failure and stops gracefully.
+      logger.error({ error: err.message, postId: dbResult.id }, "Tweet failed to post");
+      return { posted: false, postId: dbResult.id, twitterFailed: true };
+    }
     if (tweetId) {
       await markPostPublished(dbResult.id, tweetId);
       logger.info(
@@ -121,6 +148,7 @@ export async function runPipeline(runType = "scheduled") {
     const published = [];
     const skipped = [];
     let dbFailed = false;
+    let twitterFailed = false;
 
     for (const headline of filtered) {
       if (published.length >= target) break;
@@ -140,7 +168,15 @@ export async function runPipeline(runType = "scheduled") {
         continue;
       }
 
-      const qc = await qualityCheck(gen.post);
+      let qc = await qualityCheck(gen.post);
+      // One revision pass: when the LLM reviewer rejects the draft, hand its
+      // feedback back to the writer instead of dropping the story outright.
+      if (!qc.post && qc.failure?.reason === "quality_check_failed") {
+        logger.info({ title: headline.title }, "Quality check failed — regenerating once with reviewer feedback");
+        const revisionFeedback = buildRevisionFeedback(gen.post, qc.failure.details);
+        const regen = await generatePost({ headline, topStyles, revisionFeedback });
+        if (regen.post) qc = await qualityCheck(regen.post);
+      }
       if (!qc.post) {
         skipped.push({ title: headline.title, reason: qc.failure?.reason || "quality_failed" });
         continue;
@@ -158,6 +194,10 @@ export async function runPipeline(runType = "scheduled") {
         break;
       } else {
         skipped.push({ title: headline.title, reason: "twitter_post_failed" });
+        // The failure may be ambiguous (a timeout can mean the tweet actually
+        // went through unrecorded), so don't try to post another story this run.
+        twitterFailed = true;
+        break;
       }
     }
 
@@ -170,6 +210,10 @@ export async function runPipeline(runType = "scheduled") {
     // DB is unwritable and nothing landed → stop the whole run; do NOT fall
     // back to evergreen (it would just hit the same failed insert).
     if (dbFailed && published.length === 0) return DB_FAILED;
+
+    // X itself is failing → also stop without an evergreen fallback (it would
+    // hit the same API, and a tweet may have gone through unrecorded).
+    if (twitterFailed && published.length === 0) return TWITTER_FAILED;
 
     if (published.length === 0) return NO_NEWS; // nothing landed → let caller try evergreen
 
@@ -185,7 +229,7 @@ export async function runPipeline(runType = "scheduled") {
     const topic = config.topics[Math.floor(Math.random() * config.topics.length)];
     stats.details.evergreen_topic = topic;
 
-    const gen = await generateEvergreenPost({ topic });
+    let gen = await generateEvergreenPost({ topic });
     if (!gen.post) {
       return reject("generate_post", gen.failure?.reason || "generate_post_failed", {
         generate_failure: gen.failure?.details || null,
@@ -193,7 +237,17 @@ export async function runPipeline(runType = "scheduled") {
       });
     }
 
-    const qc = await qualityCheck(gen.post);
+    let qc = await qualityCheck(gen.post);
+    // One revision pass with the reviewer's feedback before giving up.
+    if (!qc.post && qc.failure?.reason === "quality_check_failed") {
+      logger.info({ topic }, "Quality check failed — regenerating once with reviewer feedback");
+      const revisionFeedback = buildRevisionFeedback(gen.post, qc.failure.details);
+      const regen = await generateEvergreenPost({ topic, revisionFeedback });
+      if (regen.post) {
+        gen = regen;
+        qc = await qualityCheck(regen.post);
+      }
+    }
     if (!qc.post) {
       logger.warn("Evergreen post failed quality check, not publishing");
       return reject("quality_check", qc.failure?.reason || "quality_check_failed", {
@@ -291,6 +345,10 @@ export async function runPipeline(runType = "scheduled") {
     if (newsResult === DB_FAILED) {
       logger.error("Database insert failed — stopping run without evergreen fallback");
       return reject("publish", "db_insert_failed", { mode: "news" });
+    }
+    if (newsResult === TWITTER_FAILED) {
+      logger.error("Posting to X failed — stopping run without evergreen fallback");
+      return reject("publish", "twitter_post_failed", { mode: "news" });
     }
     if (newsResult !== NO_NEWS) return newsResult;
 
