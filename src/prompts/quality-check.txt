@@ -1,10 +1,10 @@
 Your task: verify a post before it is published. You receive JSON:
-{ "full_text": "...", "source_title": "..." or null, "kind": "news" | "evergreen" | "promo" }.
+{ "full_text": "...", "source_title": "..." or null, "kind": "news" | "evergreen" | "promo", "product_description": "..." (promo only) }.
 
 First, the kind-specific check:
 - If kind is "news" (a source_title is given): FAITHFULNESS — the post must stay true to source_title, without inventing facts, numbers, names, dates, or quotes the headline does not support.
 - If kind is "evergreen" (no source_title): ACCURACY — the post is standalone advice (a tip, warning, explainer, or safety note), NOT tied to a news event. It must be factually correct and responsible, and must NOT fabricate specific breaches, statistics, or current events as if they were news.
-- If kind is "promo": the post intentionally promotes the account owner's own product — that is expected, do NOT fail it for being promotional. Check that it leads with something genuinely useful (a scam tell, scenario, or tip) and does NOT invent product features, statistics, user counts, testimonials, or fake stories of people being saved or scammed.
+- If kind is "promo": the post intentionally promotes the account owner's own product — that is expected, do NOT fail it for being promotional. "product_description" is the ONLY source of truth about the product: FAIL the post if it claims any product feature, capability, pricing, statistic, user count, or testimonial that product_description does not support. Also check that it leads with something genuinely useful (a scam tell, scenario, or tip) and does not invent fake stories of people being saved or scammed.
 
 Then these checks for ALL kinds:
 1. Clarity: it is clear what is being said and why it matters.

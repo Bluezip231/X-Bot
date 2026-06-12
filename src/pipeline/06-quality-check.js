@@ -1,5 +1,6 @@
 import { runPrompt } from "../services/openai-client.js";
 import { checkGuardrails } from "../utils/guardrails.js";
+import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
 /**
@@ -30,6 +31,10 @@ export async function qualityCheck(post) {
         full_text: post.full_text,
         source_title: post.source_title || null,
         kind: post.kind || "news",
+        // Promo posts are graded against the product description (the only
+        // source of truth the generator had), so the reviewer can reject
+        // invented features, pricing, or user counts.
+        ...(post.kind === "promo" ? { product_description: config.promo.description } : {}),
       }),
       { temperature: 0.2 }
     );
